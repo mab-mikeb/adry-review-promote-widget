@@ -1,1 +1,446 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
+  <title>Project ADry Review & Promote</title>
+
+  <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      padding: 18px;
+      font-family: Arial, Helvetica, sans-serif;
+      background: #f7f7f7;
+      color: #222;
+    }
+
+    .shell {
+      max-width: 1200px;
+      margin: 0 auto;
+      background: white;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    .header {
+      padding: 18px 22px;
+      border-bottom: 1px solid #ddd;
+    }
+
+    .header h1 {
+      margin: 0 0 4px 0;
+      font-size: 20px;
+    }
+
+    .header p {
+      margin: 0;
+      color: #666;
+      font-size: 13px;
+    }
+
+    .summary {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      padding: 12px 22px;
+      border-bottom: 1px solid #ddd;
+      background: #fafafa;
+    }
+
+    .badge {
+      border: 1px solid #ccc;
+      border-radius: 14px;
+      padding: 4px 10px;
+      font-size: 12px;
+      background: white;
+    }
+
+    .tabs {
+      display: flex;
+      border-bottom: 1px solid #ddd;
+      padding: 0 22px;
+    }
+
+    .tab {
+      padding: 12px 16px;
+      cursor: pointer;
+      border: none;
+      background: none;
+      font-weight: 600;
+      color: #666;
+    }
+
+    .tab.active {
+      color: #111;
+      border-bottom: 3px solid #333;
+    }
+
+    .content {
+      padding: 22px;
+    }
+
+    .panel {
+      display: none;
+    }
+
+    .panel.active {
+      display: block;
+    }
+
+    .notice {
+      padding: 12px 14px;
+      margin-bottom: 18px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      background: #fafafa;
+      font-size: 13px;
+    }
+
+    .field-grid {
+      display: grid;
+      grid-template-columns: minmax(180px, 1fr) 2fr;
+      border-top: 1px solid #ddd;
+    }
+
+    .label,
+    .value {
+      padding: 10px 12px;
+      border-bottom: 1px solid #eee;
+    }
+
+    .label {
+      font-weight: 600;
+      background: #fafafa;
+    }
+
+    .value {
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .empty {
+      color: #888;
+      font-style: italic;
+    }
+
+    .waiting {
+      padding: 50px 20px;
+      text-align: center;
+      color: #777;
+    }
+
+    @media (max-width: 700px) {
+      .field-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .label {
+        border-bottom: none;
+        padding-bottom: 2px;
+      }
+
+      .value {
+        padding-top: 2px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+<div class="shell">
+
+  <div class="header">
+    <h1>Project ADry — Review & Promote</h1>
+    <p>Read-only MVP prototype · Provider submission review</p>
+  </div>
+
+  <div id="waiting" class="waiting">
+    Select a provider submission in Grist.
+  </div>
+
+  <div id="workspace" style="display:none;">
+
+    <div class="summary">
+      <span class="badge" id="submissionBadge"></span>
+      <span class="badge" id="statusBadge"></span>
+      <span class="badge" id="providerActionBadge"></span>
+      <span class="badge" id="programActionBadge"></span>
+    </div>
+
+    <div class="tabs">
+      <button class="tab active" data-tab="provider">Provider</button>
+      <button class="tab" data-tab="program">Program</button>
+      <button class="tab" data-tab="claims">Claims / QA</button>
+    </div>
+
+    <div class="content">
+
+      <div id="provider" class="panel active">
+
+        <div class="notice" id="providerMatchNotice"></div>
+
+        <div class="field-grid">
+          <div class="label">Provider name</div>
+          <div class="value" id="Provider_Name"></div>
+
+          <div class="label">Organization website</div>
+          <div class="value" id="Website"></div>
+
+          <div class="label">Submitted contact</div>
+          <div class="value" id="Contact_Name"></div>
+
+          <div class="label">Contact email</div>
+          <div class="value" id="Contact_Email"></div>
+
+          <div class="label">Contact role</div>
+          <div class="value" id="Contact_Role"></div>
+
+          <div class="label">Existing Provider match</div>
+          <div class="value" id="Existing_Provider"></div>
+        </div>
+
+      </div>
+
+      <div id="program" class="panel">
+
+        <div class="notice" id="programMatchNotice"></div>
+
+        <div class="field-grid">
+          <div class="label">Program / service name</div>
+          <div class="value" id="Program_Name"></div>
+
+          <div class="label">Program URL</div>
+          <div class="value" id="Program_URL"></div>
+
+          <div class="label">Description</div>
+          <div class="value" id="Program_Description"></div>
+
+          <div class="label">Submitted age range</div>
+          <div class="value" id="Age_Range"></div>
+
+          <div class="label">Days offered</div>
+          <div class="value" id="Days_Offered"></div>
+
+          <div class="label">Time of day</div>
+          <div class="value" id="Time_of_Day"></div>
+
+          <div class="label">Delivery mode</div>
+          <div class="value" id="Delivery_Mode"></div>
+
+          <div class="label">Program municipality</div>
+          <div class="value" id="Municipality"></div>
+
+          <div class="label">Service area</div>
+          <div class="value" id="Service_Area"></div>
+
+          <div class="label">Cost information</div>
+          <div class="value" id="Cost_Information"></div>
+
+          <div class="label">Existing Program match</div>
+          <div class="value" id="Existing_Program"></div>
+        </div>
+
+      </div>
+
+      <div id="claims" class="panel">
+
+        <div class="notice">
+          These fields may contain eligibility, funding or other claims that
+          require human review before they become trusted canonical knowledge.
+        </div>
+
+        <div class="field-grid">
+          <div class="label">Eligibility information</div>
+          <div class="value" id="Eligibility_Information"></div>
+
+          <div class="label">Funding information</div>
+          <div class="value" id="Funding_Information"></div>
+
+          <div class="label">Additional information</div>
+          <div class="value" id="Additional_Information"></div>
+
+          <div class="label">Review notes</div>
+          <div class="value" id="Review_Notes"></div>
+        </div>
+
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+
+  grist.ready({
+    requiredAccess: 'read table'
+  });
+
+  function displayValue(value) {
+    if (
+      value === null ||
+      value === undefined ||
+      value === ''
+    ) {
+      return null;
+    }
+
+    if (Array.isArray(value)) {
+      const values =
+        value.length && value[0] === 'L'
+          ? value.slice(1)
+          : value;
+
+      return values.join(', ');
+    }
+
+    return String(value);
+  }
+
+  function put(id, value) {
+    const element = document.getElementById(id);
+
+    if (!element) {
+      return;
+    }
+
+    const result = displayValue(value);
+
+    if (result === null) {
+      element.textContent = 'Not provided';
+      element.classList.add('empty');
+    } else {
+      element.textContent = result;
+      element.classList.remove('empty');
+    }
+  }
+
+  function hasValue(value) {
+    return !(
+      value === null ||
+      value === undefined ||
+      value === '' ||
+      value === 0
+    );
+  }
+
+  function render(record) {
+
+    if (!record) {
+      document.getElementById('waiting').style.display = 'block';
+      document.getElementById('workspace').style.display = 'none';
+      return;
+    }
+
+    document.getElementById('waiting').style.display = 'none';
+    document.getElementById('workspace').style.display = 'block';
+
+    put(
+      'submissionBadge',
+      'Submission: ' + (displayValue(record.Submission_ID) || 'Unknown')
+    );
+
+    put(
+      'statusBadge',
+      'Status: ' + (displayValue(record.Review_Status) || 'Not set')
+    );
+
+    const providerAction =
+      displayValue(record.Provider_Action) ||
+      (hasValue(record.Existing_Provider) ? 'Review existing' : 'Create');
+
+    const programAction =
+      displayValue(record.Program_Action) ||
+      (hasValue(record.Existing_Program) ? 'Review existing' : 'Create');
+
+    put(
+      'providerActionBadge',
+      'Provider: ' + providerAction
+    );
+
+    put(
+      'programActionBadge',
+      'Program: ' + programAction
+    );
+
+    const providerFields = [
+      'Provider_Name',
+      'Website',
+      'Contact_Name',
+      'Contact_Email',
+      'Contact_Role',
+      'Existing_Provider'
+    ];
+
+    const programFields = [
+      'Program_Name',
+      'Program_URL',
+      'Program_Description',
+      'Age_Range',
+      'Days_Offered',
+      'Time_of_Day',
+      'Delivery_Mode',
+      'Municipality',
+      'Service_Area',
+      'Cost_Information',
+      'Existing_Program'
+    ];
+
+    const claimFields = [
+      'Eligibility_Information',
+      'Funding_Information',
+      'Additional_Information',
+      'Review_Notes'
+    ];
+
+    [...providerFields, ...programFields, ...claimFields]
+      .forEach(field => put(field, record[field]));
+
+    document.getElementById('providerMatchNotice').textContent =
+      hasValue(record.Existing_Provider)
+        ? 'An existing Provider has been matched. The next version will compare current canonical values with the submitted information.'
+        : 'No existing Provider is matched. Suggested action: CREATE Provider.';
+
+    document.getElementById('programMatchNotice').textContent =
+      hasValue(record.Existing_Program)
+        ? 'An existing Program has been matched. The next version will compare current canonical values with the submitted information.'
+        : 'No existing Program is matched. Suggested action: CREATE Program.';
+  }
+
+  grist.onRecord(function(record) {
+    render(record);
+  });
+
+  document.querySelectorAll('.tab').forEach(button => {
+
+    button.addEventListener('click', function() {
+
+      document
+        .querySelectorAll('.tab')
+        .forEach(tab => tab.classList.remove('active'));
+
+      document
+        .querySelectorAll('.panel')
+        .forEach(panel => panel.classList.remove('active'));
+
+      button.classList.add('active');
+
+      document
+        .getElementById(button.dataset.tab)
+        .classList.add('active');
+    });
+
+  });
+
+</script>
+
+</body>
+</html>
