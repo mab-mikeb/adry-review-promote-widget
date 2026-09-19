@@ -3,9 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
   <title>Project ADry Review & Promote</title>
-
   <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
 
   <style>
@@ -34,7 +32,7 @@
     }
 
     .header h1 {
-      margin: 0 0 4px 0;
+      margin: 0 0 4px;
       font-size: 20px;
     }
 
@@ -59,6 +57,38 @@
       padding: 4px 10px;
       font-size: 12px;
       background: white;
+    }
+
+    .action-strip {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      padding: 14px 22px;
+      border-bottom: 1px solid #ddd;
+      background: #fff;
+    }
+
+    .action-box label {
+      display: block;
+      font-size: 12px;
+      font-weight: 700;
+      margin-bottom: 5px;
+    }
+
+    select,
+    input,
+    textarea {
+      width: 100%;
+      border: 1px solid #bbb;
+      border-radius: 5px;
+      padding: 8px 9px;
+      font: inherit;
+      background: #fff;
+    }
+
+    textarea {
+      min-height: 74px;
+      resize: vertical;
     }
 
     .tabs {
@@ -124,14 +154,10 @@
       font-weight: 700;
     }
 
-    .review-table th:nth-child(1) { width: 20%; }
+    .review-table th:nth-child(1) { width: 19%; }
     .review-table th:nth-child(2) { width: 27%; }
-    .review-table th:nth-child(3) { width: 30%; }
-    .review-table th:nth-child(4) { width: 23%; }
-
-    .suggested {
-      font-weight: 600;
-    }
+    .review-table th:nth-child(3) { width: 32%; }
+    .review-table th:nth-child(4) { width: 22%; }
 
     .rule-badge {
       display: inline-block;
@@ -143,13 +169,7 @@
       background: #fff;
     }
 
-    .review-required {
-      font-weight: 600;
-    }
-
-    .muted {
-      color: #777;
-    }
+    .muted { color: #777; }
 
     .empty {
       color: #888;
@@ -178,6 +198,41 @@
       word-break: break-word;
     }
 
+    .save-bar {
+      position: sticky;
+      bottom: 0;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 22px;
+      border-top: 1px solid #ccc;
+      background: #fff;
+      z-index: 5;
+    }
+
+    .save-button {
+      border: 0;
+      border-radius: 6px;
+      padding: 10px 16px;
+      font-weight: 700;
+      cursor: pointer;
+      background: #222;
+      color: #fff;
+    }
+
+    .save-button:disabled {
+      cursor: default;
+      opacity: .5;
+    }
+
+    .save-status {
+      font-size: 13px;
+      color: #666;
+    }
+
+    .save-status.error { color: #9b1c1c; }
+    .save-status.success { color: #246b2d; }
+
     .waiting {
       padding: 50px 20px;
       text-align: center;
@@ -186,6 +241,8 @@
 
     @media (max-width: 760px) {
       body { padding: 8px; }
+
+      .action-strip { grid-template-columns: 1fr; }
 
       .review-table,
       .review-table thead,
@@ -234,12 +291,10 @@
 </head>
 
 <body>
-
 <div class="shell">
-
   <div class="header">
     <h1>Project ADry — Review & Promote</h1>
-    <p>Phase 8B.3 · Read-only provider, program and claims/QA review</p>
+    <p>Phase 8C.1 · Editable review drafts saved to Provider_Submissions only</p>
   </div>
 
   <div id="waiting" class="waiting">
@@ -247,12 +302,37 @@
   </div>
 
   <div id="workspace" style="display:none;">
-
     <div class="summary">
       <span class="badge" id="submissionBadge"></span>
       <span class="badge" id="statusBadge"></span>
-      <span class="badge" id="providerActionBadge"></span>
-      <span class="badge" id="programActionBadge"></span>
+      <span class="badge" id="providerMatchBadge"></span>
+      <span class="badge" id="programMatchBadge"></span>
+    </div>
+
+    <div class="action-strip">
+      <div class="action-box">
+        <label for="providerAction">Provider action</label>
+        <select id="providerAction">
+          <option value="">Select action</option>
+          <option>Create</option>
+          <option>Update</option>
+          <option>No change</option>
+          <option>Verification required</option>
+          <option>Reject</option>
+        </select>
+      </div>
+
+      <div class="action-box">
+        <label for="programAction">Program action</label>
+        <select id="programAction">
+          <option value="">Select action</option>
+          <option>Create</option>
+          <option>Update</option>
+          <option>No change</option>
+          <option>Verification required</option>
+          <option>Reject</option>
+        </select>
+      </div>
     </div>
 
     <div class="tabs">
@@ -262,15 +342,13 @@
     </div>
 
     <div class="content">
-
       <div id="provider" class="panel active">
-
         <div class="notice" id="providerMatchNotice"></div>
 
         <div class="notice">
-          <strong>Read-only QA:</strong> the right-hand values below are suggestions only.
-          Nothing is being written to the canonical Provider record or back to the submission.
-          Deterministic values are proposed automatically; judgment fields are deliberately left for reviewer input.
+          <strong>Draft mode:</strong> edit the Suggested / Final values and then use
+          <strong>Save Review Draft</strong>. This saves only to the submission's hidden review-draft fields.
+          It does not create or update a canonical Provider.
         </div>
 
         <h2 class="section-title">Provider canonical review</h2>
@@ -288,56 +366,93 @@
             <tr>
               <td>Provider_Name</td>
               <td id="p_sub_name"></td>
-              <td id="p_sug_name" class="suggested"></td>
-              <td><span class="rule-badge">Auto</span><br><span class="muted">Direct mapping</span></td>
+              <td><input id="p_final_name" type="text"></td>
+              <td><span class="rule-badge">Auto</span><br><span class="muted">Direct mapping; reviewer may edit</span></td>
             </tr>
             <tr>
               <td>Website</td>
               <td id="p_sub_website"></td>
-              <td id="p_sug_website" class="suggested"></td>
-              <td><span class="rule-badge">Auto</span><br><span class="muted">Direct mapping</span></td>
+              <td><input id="p_final_website" type="text"></td>
+              <td><span class="rule-badge">Auto</span><br><span class="muted">Direct mapping; reviewer may edit</span></td>
             </tr>
             <tr>
               <td>Organization_Type</td>
               <td id="p_sub_orgtype"></td>
-              <td id="p_sug_orgtype" class="review-required"></td>
+              <td>
+                <select id="p_final_orgtype">
+                  <option value="">Select...</option>
+                  <option>Non-profit</option>
+                  <option>Charity</option>
+                  <option>Municipal</option>
+                  <option>Government</option>
+                  <option>Private/For-profit</option>
+                  <option>Community organization</option>
+                  <option>Educational institution</option>
+                  <option>Other</option>
+                </select>
+              </td>
               <td><span class="rule-badge">Review</span><br><span class="muted">Do not infer</span></td>
             </tr>
             <tr>
               <td>Primary_Municipality</td>
               <td id="p_sub_municipality"></td>
-              <td id="p_sug_municipality" class="review-required"></td>
-              <td><span class="rule-badge">Review</span><br><span class="muted">Program location is not provider location</span></td>
+              <td><input id="p_final_municipality" type="text" placeholder="Reviewer input required"></td>
+              <td><span class="rule-badge">Review</span><br><span class="muted">Do not auto-map program location</span></td>
             </tr>
             <tr>
               <td>Information_Source</td>
               <td id="p_sub_source"></td>
-              <td id="p_sug_source" class="suggested"></td>
+              <td>
+                <select id="p_final_source">
+                  <option>Public web</option>
+                  <option>Community/directory</option>
+                  <option>Provider submitted</option>
+                  <option>Provider directly confirmed</option>
+                  <option>Synaptree research</option>
+                  <option>Other</option>
+                </select>
+              </td>
               <td><span class="rule-badge">Auto</span><br><span class="muted">Submission provenance</span></td>
             </tr>
             <tr>
               <td>Confidence_Status</td>
               <td id="p_sub_confidence"></td>
-              <td id="p_sug_confidence" class="suggested"></td>
+              <td>
+                <select id="p_final_confidence">
+                  <option>Unverified lead</option>
+                  <option>Published information checked</option>
+                  <option>Provider supplied</option>
+                  <option>Provider confirmed</option>
+                  <option>Synaptree verified</option>
+                  <option>Needs re-verification</option>
+                  <option>Superseded</option>
+                </select>
+              </td>
               <td><span class="rule-badge">Auto</span><br><span class="muted">Provider supplied, not verified</span></td>
             </tr>
             <tr>
               <td>Provider_Participation_Level</td>
               <td id="p_sub_participation"></td>
-              <td id="p_sug_participation" class="suggested"></td>
+              <td>
+                <select id="p_final_participation">
+                  <option>Community listing</option>
+                  <option>Free provider profile</option>
+                  <option>Community Builder member</option>
+                  <option>Other</option>
+                </select>
+              </td>
               <td><span class="rule-badge">Auto</span><br><span class="muted">Default community listing</span></td>
             </tr>
             <tr>
               <td>Primary_Email</td>
               <td id="p_sub_email"></td>
-              <td id="p_sug_email" class="review-required"></td>
-              <td><span class="rule-badge">Review</span><br><span class="muted">Contact email is not automatically the provider's primary email</span></td>
+              <td><input id="p_final_email" type="email" placeholder="Leave blank unless reviewer accepts/enters a provider email"></td>
+              <td><span class="rule-badge">Review</span><br><span class="muted">Do not auto-map Contact_Email</span></td>
             </tr>
           </tbody>
         </table>
 
         <h2 class="section-title">Submission context</h2>
-
         <div class="field-grid">
           <div class="label">Submitted contact</div>
           <div class="value" id="Contact_Name"></div>
@@ -348,17 +463,14 @@
           <div class="label">Existing Provider match</div>
           <div class="value" id="Existing_Provider"></div>
         </div>
-
       </div>
 
       <div id="program" class="panel">
-
         <div class="notice" id="programMatchNotice"></div>
 
         <div class="notice">
-          <strong>Read-only QA:</strong> the right-hand values below are suggestions only.
-          Nothing is being written to the canonical Program record or back to the submission.
-          Direct mappings are proposed automatically; normalization and classification fields remain reviewer decisions.
+          <strong>Draft mode:</strong> these edits are saved only into Program_Review_Draft.
+          Reference resolution and canonical promotion come later.
         </div>
 
         <h2 class="section-title">Program canonical review</h2>
@@ -376,86 +488,148 @@
             <tr>
               <td>Program_Name</td>
               <td id="g_sub_name"></td>
-              <td id="g_sug_name" class="suggested"></td>
-              <td><span class="rule-badge">Auto</span><br><span class="muted">Direct mapping</span></td>
+              <td><input id="g_final_name" type="text"></td>
+              <td><span class="rule-badge">Auto</span><br><span class="muted">Direct mapping; reviewer may edit</span></td>
             </tr>
             <tr>
               <td>Program_URL</td>
               <td id="g_sub_url"></td>
-              <td id="g_sug_url" class="suggested"></td>
-              <td><span class="rule-badge">Auto</span><br><span class="muted">Direct mapping</span></td>
+              <td><input id="g_final_url" type="text"></td>
+              <td><span class="rule-badge">Auto</span><br><span class="muted">Direct mapping; reviewer may edit</span></td>
             </tr>
             <tr>
               <td>Program_Summary</td>
               <td id="g_sub_summary"></td>
-              <td id="g_sug_summary" class="suggested"></td>
-              <td><span class="rule-badge">Auto</span><br><span class="muted">Program_Description → Program_Summary</span></td>
+              <td><textarea id="g_final_summary"></textarea></td>
+              <td><span class="rule-badge">Auto</span><br><span class="muted">Description → Summary</span></td>
             </tr>
             <tr>
               <td>Delivery_Mode</td>
               <td id="g_sub_delivery"></td>
-              <td id="g_sug_delivery" class="suggested"></td>
+              <td>
+                <select id="g_final_delivery">
+                  <option value="">Select...</option>
+                  <option>In-person</option>
+                  <option>Virtual</option>
+                  <option>Hybrid</option>
+                </select>
+              </td>
               <td><span class="rule-badge">Auto</span><br><span class="muted">Direct mapping</span></td>
             </tr>
             <tr>
               <td>Days_Offered</td>
               <td id="g_sub_days"></td>
-              <td id="g_sug_days" class="suggested"></td>
-              <td><span class="rule-badge">Auto</span><br><span class="muted">Direct mapping</span></td>
+              <td><input id="g_final_days" type="text"></td>
+              <td><span class="rule-badge">Auto</span><br><span class="muted">Draft stores reviewer-normalized text</span></td>
             </tr>
             <tr>
               <td>Time_of_Day</td>
               <td id="g_sub_time"></td>
-              <td id="g_sug_time" class="suggested"></td>
-              <td><span class="rule-badge">Auto</span><br><span class="muted">Direct mapping</span></td>
+              <td><input id="g_final_time" type="text"></td>
+              <td><span class="rule-badge">Auto</span><br><span class="muted">Draft stores reviewer-normalized text</span></td>
             </tr>
             <tr>
               <td>Cost_Notes</td>
               <td id="g_sub_costnotes"></td>
-              <td id="g_sug_costnotes" class="suggested"></td>
-              <td><span class="rule-badge">Auto</span><br><span class="muted">Cost_Information → Cost_Notes</span></td>
+              <td><textarea id="g_final_costnotes"></textarea></td>
+              <td><span class="rule-badge">Auto</span><br><span class="muted">Cost information → Cost notes</span></td>
             </tr>
             <tr>
               <td>Information_Source</td>
               <td id="g_sub_source"></td>
-              <td id="g_sug_source" class="suggested"></td>
+              <td>
+                <select id="g_final_source">
+                  <option>Public web</option>
+                  <option>Community/directory</option>
+                  <option>Provider submitted</option>
+                  <option>Provider directly confirmed</option>
+                  <option>Synaptree research</option>
+                  <option>Other</option>
+                </select>
+              </td>
               <td><span class="rule-badge">Auto</span><br><span class="muted">Submission provenance</span></td>
             </tr>
             <tr>
               <td>Confidence_Status</td>
               <td id="g_sub_confidence"></td>
-              <td id="g_sug_confidence" class="suggested"></td>
+              <td>
+                <select id="g_final_confidence">
+                  <option>Unverified lead</option>
+                  <option>Published information checked</option>
+                  <option>Provider supplied</option>
+                  <option>Provider confirmed</option>
+                  <option>Synaptree verified</option>
+                  <option>Needs re-verification</option>
+                  <option>Superseded</option>
+                </select>
+              </td>
               <td><span class="rule-badge">Auto</span><br><span class="muted">Provider supplied, not verified</span></td>
             </tr>
             <tr>
               <td>Program_Category</td>
               <td id="g_sub_category"></td>
-              <td id="g_sug_category" class="review-required"></td>
-              <td><span class="rule-badge">Review</span><br><span class="muted">Classification requires reviewer judgment</span></td>
+              <td>
+                <select id="g_final_category">
+                  <option value="">Select...</option>
+                  <option>Social/Recreation</option>
+                  <option>Life Skills</option>
+                  <option>Employment</option>
+                  <option>Education/Training</option>
+                  <option>Respite</option>
+                  <option>Community Participation</option>
+                  <option>Other</option>
+                </select>
+              </td>
+              <td><span class="rule-badge">Review</span><br><span class="muted">Classification</span></td>
             </tr>
             <tr>
               <td>Age_Band</td>
               <td id="g_sub_age"></td>
-              <td id="g_sug_age" class="review-required"></td>
-              <td><span class="rule-badge">Review</span><br><span class="muted">Normalize submitted age text</span></td>
+              <td>
+                <select id="g_final_age">
+                  <option value="">Select...</option>
+                  <option>Child</option>
+                  <option>Teen</option>
+                  <option>Young Adult</option>
+                  <option>Adult</option>
+                  <option>Older Adult</option>
+                  <option>All Ages</option>
+                  <option>Other/Unclear</option>
+                </select>
+              </td>
+              <td><span class="rule-badge">Review</span><br><span class="muted">Normalize age text</span></td>
             </tr>
             <tr>
               <td>Primary_Municipality</td>
               <td id="g_sub_municipality"></td>
-              <td id="g_sug_municipality" class="review-required"></td>
-              <td><span class="rule-badge">Review</span><br><span class="muted">Resolve text to Locations reference</span></td>
+              <td><input id="g_final_municipality" type="text"></td>
+              <td><span class="rule-badge">Review</span><br><span class="muted">Location reference resolution comes later</span></td>
             </tr>
             <tr>
               <td>Cost_Basis</td>
               <td id="g_sub_costbasis"></td>
-              <td id="g_sug_costbasis" class="review-required"></td>
-              <td><span class="rule-badge">Review</span><br><span class="muted">Do not infer billing model from free text</span></td>
+              <td>
+                <select id="g_final_costbasis">
+                  <option value="">Select...</option>
+                  <option>Free</option>
+                  <option>Drop-in</option>
+                  <option>Per session</option>
+                  <option>Weekly</option>
+                  <option>Monthly</option>
+                  <option>Program/term</option>
+                  <option>Annual</option>
+                  <option>Tuition</option>
+                  <option>Variable</option>
+                  <option>Quote required</option>
+                  <option>Other</option>
+                </select>
+              </td>
+              <td><span class="rule-badge">Review</span><br><span class="muted">Do not infer billing model</span></td>
             </tr>
           </tbody>
         </table>
 
         <h2 class="section-title">Submission context</h2>
-
         <div class="field-grid">
           <div class="label">Service area</div>
           <div class="value" id="Service_Area"></div>
@@ -463,17 +637,13 @@
           <div class="label">Existing Program match</div>
           <div class="value" id="Existing_Program"></div>
         </div>
-
       </div>
 
       <div id="claims" class="panel">
-
         <div class="notice">
-          <strong>Claims/QA boundary:</strong> submitted eligibility and funding statements are not automatically promoted into trusted knowledge.
-          This tab identifies what needs verification or reviewer judgment before canonical Eligibility_Rules, Program_Funding, Sources_Verification, or Verification_Tasks are changed.
+          <strong>Claims/QA boundary:</strong> decisions here are saved as review-draft metadata only.
+          They do not update Eligibility_Rules, Program_Funding, Sources_Verification, or Verification_Tasks.
         </div>
-
-        <div class="notice" id="claimsWorkflowNotice"></div>
 
         <h2 class="section-title">Claims review</h2>
 
@@ -482,7 +652,7 @@
             <tr>
               <th>Claim area</th>
               <th>Submitted</th>
-              <th>Suggested disposition</th>
+              <th>Reviewer decision</th>
               <th>Reason / next step</th>
             </tr>
           </thead>
@@ -490,61 +660,74 @@
             <tr>
               <td>Eligibility</td>
               <td id="c_sub_eligibility"></td>
-              <td id="c_disp_eligibility" class="review-required"></td>
-              <td id="c_reason_eligibility"></td>
+              <td>
+                <select id="c_decision_eligibility">
+                  <option>Accept</option>
+                  <option>No change</option>
+                  <option>Verification required</option>
+                  <option>Reject</option>
+                </select>
+              </td>
+              <td>Verify before changing canonical Eligibility_Rules unless the reviewer has sufficient documented evidence.</td>
             </tr>
             <tr>
               <td>Funding</td>
               <td id="c_sub_funding"></td>
-              <td id="c_disp_funding" class="review-required"></td>
-              <td id="c_reason_funding"></td>
+              <td>
+                <select id="c_decision_funding">
+                  <option>Accept</option>
+                  <option>No change</option>
+                  <option>Verification required</option>
+                  <option>Reject</option>
+                </select>
+              </td>
+              <td>Verify before changing Program_Funding. Provider-supplied information alone does not mean a funding source is accepted.</td>
             </tr>
             <tr>
               <td>Additional information</td>
               <td id="c_sub_additional"></td>
-              <td id="c_disp_additional" class="review-required"></td>
-              <td id="c_reason_additional"></td>
+              <td>
+                <select id="c_decision_additional">
+                  <option>Accept</option>
+                  <option>No change</option>
+                  <option>Verification required</option>
+                  <option>Reject</option>
+                </select>
+              </td>
+              <td>Reviewer decides whether it belongs in a canonical field, source, verification task, or remains submission context.</td>
             </tr>
             <tr>
               <td>Internal review notes</td>
               <td id="c_sub_reviewnotes"></td>
-              <td id="c_disp_reviewnotes"></td>
-              <td id="c_reason_reviewnotes"></td>
+              <td><span class="muted">Context only</span></td>
+              <td>Internal notes are not promoted as provider-supplied canonical facts.</td>
             </tr>
           </tbody>
         </table>
 
-        <h2 class="section-title">MVP handling rules</h2>
-
-        <div class="field-grid">
-          <div class="label">Eligibility claims</div>
-          <div class="value">Verify before creating or changing Eligibility_Rules. A submitted statement is evidence to review, not a verified rule.</div>
-
-          <div class="label">Funding claims</div>
-          <div class="value">Verify before creating or changing Program_Funding. Do not treat a provider submission alone as proof that a funding source is accepted.</div>
-
-          <div class="label">Additional information</div>
-          <div class="value">Reviewer determines whether the information belongs in Provider, Program, a verification task, a source record, or nowhere in the canonical KB.</div>
-
-          <div class="label">Deep Review</div>
-          <div class="value">Use Provider Deep Review when evidence, funding, eligibility, conflicts, or verification tasks require investigation.</div>
-        </div>
-
+        <h2 class="section-title">Reviewer notes for this draft</h2>
+        <textarea id="draftReviewerNotes" placeholder="Optional notes explaining decisions or items for Deep Review"></textarea>
       </div>
+    </div>
 
+    <div class="save-bar">
+      <button id="saveDraft" class="save-button">Save Review Draft</button>
+      <span id="saveStatus" class="save-status">No unsaved changes.</span>
     </div>
   </div>
 </div>
 
 <script>
   grist.ready({
-    requiredAccess: 'read table'
+    requiredAccess: 'full'
   });
 
+  let currentRecord = null;
+  let isDirty = false;
+  let isRendering = false;
+
   function displayValue(value) {
-    if (value === null || value === undefined || value === '') {
-      return null;
-    }
+    if (value === null || value === undefined || value === '') return null;
 
     if (Array.isArray(value)) {
       const values = value.length && value[0] === 'L' ? value.slice(1) : value;
@@ -569,211 +752,289 @@
     }
   }
 
+  function setControl(id, value) {
+    const element = document.getElementById(id);
+    if (!element) return;
+    element.value = value === null || value === undefined ? '' : String(value);
+  }
+
+  function getControl(id) {
+    const element = document.getElementById(id);
+    return element ? element.value : '';
+  }
+
   function hasValue(value) {
     return !(value === null || value === undefined || value === '' || value === 0);
   }
 
-  function renderProviderSuggestions(record) {
-    put('p_sub_name', record.Provider_Name);
-    put('p_sug_name', record.Provider_Name);
+  function parseDraft(value) {
+    const raw = displayValue(value);
+    if (!raw) return null;
 
-    put('p_sub_website', record.Website);
-    put('p_sug_website', record.Website);
-
-    put('p_sub_orgtype', null, 'Not collected in submission');
-    put('p_sug_orgtype', 'Reviewer input required');
-
-    put(
-      'p_sub_municipality',
-      record.Municipality,
-      'No program municipality supplied'
-    );
-    put(
-      'p_sug_municipality',
-      'Reviewer input required — do not auto-map program municipality'
-    );
-
-    put('p_sub_source', null, 'Derived from submission');
-    put('p_sug_source', 'Provider submitted');
-
-    put('p_sub_confidence', null, 'Derived from submission');
-    put('p_sug_confidence', 'Provider supplied');
-
-    put('p_sub_participation', null, 'No participation level supplied');
-    put('p_sug_participation', 'Community listing');
-
-    put('p_sub_email', record.Contact_Email);
-    put(
-      'p_sug_email',
-      'Reviewer decision required — do not auto-map Contact_Email'
-    );
+    try {
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === 'object' ? parsed : null;
+    } catch (err) {
+      return null;
+    }
   }
 
-  function renderProgramSuggestions(record) {
-    put('g_sub_name', record.Program_Name);
-    put('g_sug_name', record.Program_Name);
-
-    put('g_sub_url', record.Program_URL);
-    put('g_sug_url', record.Program_URL);
-
-    put('g_sub_summary', record.Program_Description);
-    put('g_sug_summary', record.Program_Description);
-
-    put('g_sub_delivery', record.Delivery_Mode);
-    put('g_sug_delivery', record.Delivery_Mode);
-
-    put('g_sub_days', record.Days_Offered);
-    put('g_sug_days', record.Days_Offered);
-
-    put('g_sub_time', record.Time_of_Day);
-    put('g_sug_time', record.Time_of_Day);
-
-    put('g_sub_costnotes', record.Cost_Information);
-    put('g_sug_costnotes', record.Cost_Information);
-
-    put('g_sub_source', null, 'Derived from submission');
-    put('g_sug_source', 'Provider submitted');
-
-    put('g_sub_confidence', null, 'Derived from submission');
-    put('g_sug_confidence', 'Provider supplied');
-
-    put('g_sub_category', null, 'Not collected as canonical category');
-    put('g_sug_category', 'Reviewer input required');
-
-    put('g_sub_age', record.Age_Range);
-    put('g_sug_age', 'Reviewer normalization required');
-
-    put('g_sub_municipality', record.Municipality);
-    put('g_sug_municipality', 'Reviewer must resolve to a Locations record');
-
-    put('g_sub_costbasis', record.Cost_Information);
-    put('g_sug_costbasis', 'Reviewer input required');
+  function setSaveStatus(message, kind) {
+    const element = document.getElementById('saveStatus');
+    element.textContent = message;
+    element.className = 'save-status' + (kind ? ' ' + kind : '');
   }
 
-  function renderClaimsQA(record) {
-    const eligibilityPresent = hasValue(record.Eligibility_Information);
-    const fundingPresent = hasValue(record.Funding_Information);
-    const additionalPresent = hasValue(record.Additional_Information);
-    const reviewNotesPresent = hasValue(record.Review_Notes);
+  function markDirty() {
+    if (isRendering) return;
+    isDirty = true;
+    setSaveStatus('Unsaved changes. Save before selecting another submission.');
+  }
 
-    put('c_sub_eligibility', record.Eligibility_Information);
-    put(
-      'c_disp_eligibility',
-      eligibilityPresent ? 'Verification required' : 'No change'
-    );
-    put(
-      'c_reason_eligibility',
-      eligibilityPresent
-        ? 'Review evidence before creating or updating canonical Eligibility_Rules.'
-        : 'No eligibility claim was submitted.'
-    );
-
-    put('c_sub_funding', record.Funding_Information);
-    put(
-      'c_disp_funding',
-      fundingPresent ? 'Verification required' : 'No change'
-    );
-    put(
-      'c_reason_funding',
-      fundingPresent
-        ? 'Confirm the funding relationship before creating or updating Program_Funding.'
-        : 'No funding claim was submitted.'
-    );
-
-    put('c_sub_additional', record.Additional_Information);
-    put(
-      'c_disp_additional',
-      additionalPresent ? 'Reviewer decision required' : 'No change'
-    );
-    put(
-      'c_reason_additional',
-      additionalPresent
-        ? 'Determine whether this belongs in a canonical field, source, verification task, or should remain submission context.'
-        : 'No additional information was submitted.'
-    );
-
-    put('c_sub_reviewnotes', record.Review_Notes);
-    put(
-      'c_disp_reviewnotes',
-      reviewNotesPresent ? 'Context only' : 'No change'
-    );
-    put(
-      'c_reason_reviewnotes',
-      reviewNotesPresent
-        ? 'Internal review notes are not promoted as provider-supplied canonical facts.'
-        : 'No internal review notes are present.'
-    );
-
-    const verificationNeeded = eligibilityPresent || fundingPresent;
-
-    document.getElementById('claimsWorkflowNotice').textContent =
-      verificationNeeded
-        ? 'Workflow guidance: one or more submitted claims require verification. Keep them out of trusted canonical claim tables until reviewed; use Deep Review when investigation is needed.'
-        : additionalPresent
-          ? 'Workflow guidance: no eligibility or funding verification was triggered, but additional information still requires reviewer judgment.'
-          : 'Workflow guidance: no eligibility, funding, or additional claim review is triggered by this submission.';
+  function inferredEntityAction(existingReference) {
+    return hasValue(existingReference) ? '' : 'Create';
   }
 
   function render(record) {
+    currentRecord = record || null;
+
     if (!record) {
       document.getElementById('waiting').style.display = 'block';
       document.getElementById('workspace').style.display = 'none';
       return;
     }
 
+    isRendering = true;
+
     document.getElementById('waiting').style.display = 'none';
     document.getElementById('workspace').style.display = 'block';
 
+    const providerDraft = parseDraft(record.Provider_Review_Draft) || {};
+    const programDraft = parseDraft(record.Program_Review_Draft) || {};
+    const providerFields = providerDraft.fields || {};
+    const programFields = programDraft.fields || {};
+    const claims = programDraft.claims || {};
+
+    put('submissionBadge', 'Submission: ' + (displayValue(record.Submission_ID) || 'Unknown'));
+    put('statusBadge', 'Status: ' + (displayValue(record.Review_Status) || 'Not set'));
+
     put(
-      'submissionBadge',
-      'Submission: ' + (displayValue(record.Submission_ID) || 'Unknown')
+      'providerMatchBadge',
+      hasValue(record.Existing_Provider) ? 'Provider: matched' : 'Provider: new'
     );
 
     put(
-      'statusBadge',
-      'Status: ' + (displayValue(record.Review_Status) || 'Not set')
+      'programMatchBadge',
+      hasValue(record.Existing_Program) ? 'Program: matched' : 'Program: new'
     );
 
-    const providerAction =
-      displayValue(record.Provider_Action) ||
-      (hasValue(record.Existing_Provider) ? 'Review existing' : 'Create');
+    setControl(
+      'providerAction',
+      providerDraft.action || displayValue(record.Provider_Action) || inferredEntityAction(record.Existing_Provider)
+    );
 
-    const programAction =
-      displayValue(record.Program_Action) ||
-      (hasValue(record.Existing_Program) ? 'Review existing' : 'Create');
-
-    put('providerActionBadge', 'Provider: ' + providerAction);
-    put('programActionBadge', 'Program: ' + programAction);
-
-    renderProviderSuggestions(record);
-    renderProgramSuggestions(record);
-    renderClaimsQA(record);
-
-    const contextFields = [
-      'Contact_Name',
-      'Contact_Role',
-      'Existing_Provider'
-    ];
-
-    const programFields = [
-      'Service_Area',
-      'Existing_Program'
-    ];
-
-    const claimFields = [];
-
-    [...contextFields, ...programFields, ...claimFields]
-      .forEach(field => put(field, record[field]));
+    setControl(
+      'programAction',
+      programDraft.action || displayValue(record.Program_Action) || inferredEntityAction(record.Existing_Program)
+    );
 
     document.getElementById('providerMatchNotice').textContent =
       hasValue(record.Existing_Provider)
-        ? 'An existing Provider has been matched. This read-only version shows submission-based suggestions only; canonical comparison will be added after the required access model is tested.'
-        : 'No existing Provider is matched. Suggested action: CREATE Provider after reviewer approval.';
+        ? 'An existing Provider is matched. Select the intended action and edit the draft values as needed. Canonical comparison is not yet enabled.'
+        : 'No existing Provider is matched. The default action is CREATE; reviewer approval will still be required before canonical promotion.';
 
     document.getElementById('programMatchNotice').textContent =
       hasValue(record.Existing_Program)
-        ? 'An existing Program has been matched. This read-only version shows submission-based suggestions; canonical value comparison will be added when broader document read access is introduced.'
-        : 'No existing Program is matched. Suggested action: CREATE Program after reviewer approval.';
+        ? 'An existing Program is matched. Select the intended action and edit the draft values as needed. Canonical comparison is not yet enabled.'
+        : 'No existing Program is matched. The default action is CREATE; reviewer approval will still be required before canonical promotion.';
+
+    put('p_sub_name', record.Provider_Name);
+    put('p_sub_website', record.Website);
+    put('p_sub_orgtype', null, 'Not collected in submission');
+    put('p_sub_municipality', record.Municipality, 'No program municipality supplied');
+    put('p_sub_source', null, 'Derived from submission');
+    put('p_sub_confidence', null, 'Derived from submission');
+    put('p_sub_participation', null, 'No participation level supplied');
+    put('p_sub_email', record.Contact_Email);
+
+    setControl('p_final_name', providerFields.Provider_Name ?? record.Provider_Name ?? '');
+    setControl('p_final_website', providerFields.Website ?? record.Website ?? '');
+    setControl('p_final_orgtype', providerFields.Organization_Type ?? '');
+    setControl('p_final_municipality', providerFields.Primary_Municipality ?? '');
+    setControl('p_final_source', providerFields.Information_Source ?? 'Provider submitted');
+    setControl('p_final_confidence', providerFields.Confidence_Status ?? 'Provider supplied');
+    setControl('p_final_participation', providerFields.Provider_Participation_Level ?? 'Community listing');
+    setControl('p_final_email', providerFields.Primary_Email ?? '');
+
+    put('Contact_Name', record.Contact_Name);
+    put('Contact_Role', record.Contact_Role);
+    put('Existing_Provider', record.Existing_Provider);
+
+    put('g_sub_name', record.Program_Name);
+    put('g_sub_url', record.Program_URL);
+    put('g_sub_summary', record.Program_Description);
+    put('g_sub_delivery', record.Delivery_Mode);
+    put('g_sub_days', record.Days_Offered);
+    put('g_sub_time', record.Time_of_Day);
+    put('g_sub_costnotes', record.Cost_Information);
+    put('g_sub_source', null, 'Derived from submission');
+    put('g_sub_confidence', null, 'Derived from submission');
+    put('g_sub_category', null, 'Not collected as canonical category');
+    put('g_sub_age', record.Age_Range);
+    put('g_sub_municipality', record.Municipality);
+    put('g_sub_costbasis', record.Cost_Information);
+
+    setControl('g_final_name', programFields.Program_Name ?? record.Program_Name ?? '');
+    setControl('g_final_url', programFields.Program_URL ?? record.Program_URL ?? '');
+    setControl('g_final_summary', programFields.Program_Summary ?? record.Program_Description ?? '');
+    setControl('g_final_delivery', programFields.Delivery_Mode ?? record.Delivery_Mode ?? '');
+    setControl('g_final_days', programFields.Days_Offered ?? displayValue(record.Days_Offered) ?? '');
+    setControl('g_final_time', programFields.Time_of_Day ?? displayValue(record.Time_of_Day) ?? '');
+    setControl('g_final_costnotes', programFields.Cost_Notes ?? record.Cost_Information ?? '');
+    setControl('g_final_source', programFields.Information_Source ?? 'Provider submitted');
+    setControl('g_final_confidence', programFields.Confidence_Status ?? 'Provider supplied');
+    setControl('g_final_category', programFields.Program_Category ?? '');
+    setControl('g_final_age', programFields.Age_Band ?? '');
+    setControl('g_final_municipality', programFields.Primary_Municipality ?? record.Municipality ?? '');
+    setControl('g_final_costbasis', programFields.Cost_Basis ?? '');
+
+    put('Service_Area', record.Service_Area);
+    put('Existing_Program', record.Existing_Program);
+
+    put('c_sub_eligibility', record.Eligibility_Information);
+    put('c_sub_funding', record.Funding_Information);
+    put('c_sub_additional', record.Additional_Information);
+    put('c_sub_reviewnotes', record.Review_Notes);
+
+    setControl(
+      'c_decision_eligibility',
+      claims.eligibility_decision || (hasValue(record.Eligibility_Information) ? 'Verification required' : 'No change')
+    );
+
+    setControl(
+      'c_decision_funding',
+      claims.funding_decision || (hasValue(record.Funding_Information) ? 'Verification required' : 'No change')
+    );
+
+    setControl(
+      'c_decision_additional',
+      claims.additional_decision || (hasValue(record.Additional_Information) ? 'Accept' : 'No change')
+    );
+
+    setControl('draftReviewerNotes', programDraft.reviewer_notes || '');
+
+    isDirty = false;
+    setSaveStatus(
+      providerDraft.version || programDraft.version
+        ? 'Saved draft loaded.'
+        : 'No saved review draft yet.'
+    );
+
+    isRendering = false;
+  }
+
+  function collectProviderDraft() {
+    return {
+      version: '8C.1',
+      suggestion_source: 'Rules',
+      action: getControl('providerAction'),
+      fields: {
+        Provider_Name: getControl('p_final_name'),
+        Website: getControl('p_final_website'),
+        Organization_Type: getControl('p_final_orgtype'),
+        Primary_Municipality: getControl('p_final_municipality'),
+        Information_Source: getControl('p_final_source'),
+        Confidence_Status: getControl('p_final_confidence'),
+        Provider_Participation_Level: getControl('p_final_participation'),
+        Primary_Email: getControl('p_final_email')
+      }
+    };
+  }
+
+  function collectProgramDraft() {
+    return {
+      version: '8C.1',
+      suggestion_source: 'Rules',
+      action: getControl('programAction'),
+      fields: {
+        Program_Name: getControl('g_final_name'),
+        Program_URL: getControl('g_final_url'),
+        Program_Summary: getControl('g_final_summary'),
+        Delivery_Mode: getControl('g_final_delivery'),
+        Days_Offered: getControl('g_final_days'),
+        Time_of_Day: getControl('g_final_time'),
+        Cost_Notes: getControl('g_final_costnotes'),
+        Information_Source: getControl('g_final_source'),
+        Confidence_Status: getControl('g_final_confidence'),
+        Program_Category: getControl('g_final_category'),
+        Age_Band: getControl('g_final_age'),
+        Primary_Municipality: getControl('g_final_municipality'),
+        Cost_Basis: getControl('g_final_costbasis')
+      },
+      claims: {
+        eligibility_decision: getControl('c_decision_eligibility'),
+        funding_decision: getControl('c_decision_funding'),
+        additional_decision: getControl('c_decision_additional')
+      },
+      reviewer_notes: getControl('draftReviewerNotes')
+    };
+  }
+
+  async function saveDraft() {
+    if (!currentRecord || !currentRecord.id) {
+      setSaveStatus('Cannot save: no selected submission row.', 'error');
+      return;
+    }
+
+    const providerAction = getControl('providerAction');
+    const programAction = getControl('programAction');
+
+    if (!providerAction || !programAction) {
+      setSaveStatus('Select both Provider Action and Program Action before saving.', 'error');
+      return;
+    }
+
+    const button = document.getElementById('saveDraft');
+    button.disabled = true;
+    setSaveStatus('Saving review draft...');
+
+    const providerDraft = collectProviderDraft();
+    const programDraft = collectProgramDraft();
+
+    const updates = {
+      Provider_Action: providerAction,
+      Program_Action: programAction,
+      Provider_Review_Draft: JSON.stringify(providerDraft),
+      Program_Review_Draft: JSON.stringify(programDraft)
+    };
+
+    if (displayValue(currentRecord.Review_Status) === 'New') {
+      updates.Review_Status = 'In Review';
+    }
+
+    try {
+      await grist.docApi.applyUserActions([
+        ['UpdateRecord', 'Provider_Submissions', currentRecord.id, updates]
+      ]);
+
+      currentRecord.Provider_Action = providerAction;
+      currentRecord.Program_Action = programAction;
+      currentRecord.Provider_Review_Draft = JSON.stringify(providerDraft);
+      currentRecord.Program_Review_Draft = JSON.stringify(programDraft);
+
+      if (updates.Review_Status) {
+        currentRecord.Review_Status = updates.Review_Status;
+        put('statusBadge', 'Status: ' + updates.Review_Status);
+      }
+
+      isDirty = false;
+      setSaveStatus('Review draft saved to Provider_Submissions.', 'success');
+    } catch (err) {
+      console.error(err);
+      setSaveStatus('Save failed: ' + (err && err.message ? err.message : String(err)), 'error');
+    } finally {
+      button.disabled = false;
+    }
   }
 
   grist.onRecord(function(record) {
@@ -782,19 +1043,19 @@
 
   document.querySelectorAll('.tab').forEach(button => {
     button.addEventListener('click', function() {
-      document
-        .querySelectorAll('.tab')
-        .forEach(tab => tab.classList.remove('active'));
-
-      document
-        .querySelectorAll('.panel')
-        .forEach(panel => panel.classList.remove('active'));
-
+      document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+      document.querySelectorAll('.panel').forEach(panel => panel.classList.remove('active'));
       button.classList.add('active');
       document.getElementById(button.dataset.tab).classList.add('active');
     });
   });
-</script>
 
+  document.querySelectorAll('input, select, textarea').forEach(element => {
+    element.addEventListener('change', markDirty);
+    element.addEventListener('input', markDirty);
+  });
+
+  document.getElementById('saveDraft').addEventListener('click', saveDraft);
+</script>
 </body>
 </html>
