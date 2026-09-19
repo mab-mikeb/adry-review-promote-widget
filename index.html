@@ -239,7 +239,7 @@
 
   <div class="header">
     <h1>Project ADry — Review & Promote</h1>
-    <p>Phase 8B.2 · Read-only provider and program canonical-value suggestions</p>
+    <p>Phase 8B.3 · Read-only provider, program and claims/QA review</p>
   </div>
 
   <div id="waiting" class="waiting">
@@ -469,21 +469,65 @@
       <div id="claims" class="panel">
 
         <div class="notice">
-          These fields may contain eligibility, funding or other claims that require human review before they become trusted canonical knowledge.
+          <strong>Claims/QA boundary:</strong> submitted eligibility and funding statements are not automatically promoted into trusted knowledge.
+          This tab identifies what needs verification or reviewer judgment before canonical Eligibility_Rules, Program_Funding, Sources_Verification, or Verification_Tasks are changed.
         </div>
 
-        <div class="field-grid">
-          <div class="label">Eligibility information</div>
-          <div class="value" id="Eligibility_Information"></div>
+        <div class="notice" id="claimsWorkflowNotice"></div>
 
-          <div class="label">Funding information</div>
-          <div class="value" id="Funding_Information"></div>
+        <h2 class="section-title">Claims review</h2>
+
+        <table class="review-table">
+          <thead>
+            <tr>
+              <th>Claim area</th>
+              <th>Submitted</th>
+              <th>Suggested disposition</th>
+              <th>Reason / next step</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Eligibility</td>
+              <td id="c_sub_eligibility"></td>
+              <td id="c_disp_eligibility" class="review-required"></td>
+              <td id="c_reason_eligibility"></td>
+            </tr>
+            <tr>
+              <td>Funding</td>
+              <td id="c_sub_funding"></td>
+              <td id="c_disp_funding" class="review-required"></td>
+              <td id="c_reason_funding"></td>
+            </tr>
+            <tr>
+              <td>Additional information</td>
+              <td id="c_sub_additional"></td>
+              <td id="c_disp_additional" class="review-required"></td>
+              <td id="c_reason_additional"></td>
+            </tr>
+            <tr>
+              <td>Internal review notes</td>
+              <td id="c_sub_reviewnotes"></td>
+              <td id="c_disp_reviewnotes"></td>
+              <td id="c_reason_reviewnotes"></td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h2 class="section-title">MVP handling rules</h2>
+
+        <div class="field-grid">
+          <div class="label">Eligibility claims</div>
+          <div class="value">Verify before creating or changing Eligibility_Rules. A submitted statement is evidence to review, not a verified rule.</div>
+
+          <div class="label">Funding claims</div>
+          <div class="value">Verify before creating or changing Program_Funding. Do not treat a provider submission alone as proof that a funding source is accepted.</div>
 
           <div class="label">Additional information</div>
-          <div class="value" id="Additional_Information"></div>
+          <div class="value">Reviewer determines whether the information belongs in Provider, Program, a verification task, a source record, or nowhere in the canonical KB.</div>
 
-          <div class="label">Review notes</div>
-          <div class="value" id="Review_Notes"></div>
+          <div class="label">Deep Review</div>
+          <div class="value">Use Provider Deep Review when evidence, funding, eligibility, conflicts, or verification tasks require investigation.</div>
         </div>
 
       </div>
@@ -606,6 +650,70 @@
     put('g_sug_costbasis', 'Reviewer input required');
   }
 
+  function renderClaimsQA(record) {
+    const eligibilityPresent = hasValue(record.Eligibility_Information);
+    const fundingPresent = hasValue(record.Funding_Information);
+    const additionalPresent = hasValue(record.Additional_Information);
+    const reviewNotesPresent = hasValue(record.Review_Notes);
+
+    put('c_sub_eligibility', record.Eligibility_Information);
+    put(
+      'c_disp_eligibility',
+      eligibilityPresent ? 'Verification required' : 'No change'
+    );
+    put(
+      'c_reason_eligibility',
+      eligibilityPresent
+        ? 'Review evidence before creating or updating canonical Eligibility_Rules.'
+        : 'No eligibility claim was submitted.'
+    );
+
+    put('c_sub_funding', record.Funding_Information);
+    put(
+      'c_disp_funding',
+      fundingPresent ? 'Verification required' : 'No change'
+    );
+    put(
+      'c_reason_funding',
+      fundingPresent
+        ? 'Confirm the funding relationship before creating or updating Program_Funding.'
+        : 'No funding claim was submitted.'
+    );
+
+    put('c_sub_additional', record.Additional_Information);
+    put(
+      'c_disp_additional',
+      additionalPresent ? 'Reviewer decision required' : 'No change'
+    );
+    put(
+      'c_reason_additional',
+      additionalPresent
+        ? 'Determine whether this belongs in a canonical field, source, verification task, or should remain submission context.'
+        : 'No additional information was submitted.'
+    );
+
+    put('c_sub_reviewnotes', record.Review_Notes);
+    put(
+      'c_disp_reviewnotes',
+      reviewNotesPresent ? 'Context only' : 'No change'
+    );
+    put(
+      'c_reason_reviewnotes',
+      reviewNotesPresent
+        ? 'Internal review notes are not promoted as provider-supplied canonical facts.'
+        : 'No internal review notes are present.'
+    );
+
+    const verificationNeeded = eligibilityPresent || fundingPresent;
+
+    document.getElementById('claimsWorkflowNotice').textContent =
+      verificationNeeded
+        ? 'Workflow guidance: one or more submitted claims require verification. Keep them out of trusted canonical claim tables until reviewed; use Deep Review when investigation is needed.'
+        : additionalPresent
+          ? 'Workflow guidance: no eligibility or funding verification was triggered, but additional information still requires reviewer judgment.'
+          : 'Workflow guidance: no eligibility, funding, or additional claim review is triggered by this submission.';
+  }
+
   function render(record) {
     if (!record) {
       document.getElementById('waiting').style.display = 'block';
@@ -639,6 +747,7 @@
 
     renderProviderSuggestions(record);
     renderProgramSuggestions(record);
+    renderClaimsQA(record);
 
     const contextFields = [
       'Contact_Name',
@@ -651,12 +760,7 @@
       'Existing_Program'
     ];
 
-    const claimFields = [
-      'Eligibility_Information',
-      'Funding_Information',
-      'Additional_Information',
-      'Review_Notes'
-    ];
+    const claimFields = [];
 
     [...contextFields, ...programFields, ...claimFields]
       .forEach(field => put(field, record[field]));
