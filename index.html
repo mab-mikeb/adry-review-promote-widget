@@ -239,7 +239,7 @@
 
   <div class="header">
     <h1>Project ADry — Review & Promote</h1>
-    <p>Phase 8B.1 · Read-only provider canonical-value suggestions</p>
+    <p>Phase 8B.2 · Read-only provider and program canonical-value suggestions</p>
   </div>
 
   <div id="waiting" class="waiting">
@@ -356,39 +356,109 @@
         <div class="notice" id="programMatchNotice"></div>
 
         <div class="notice">
-          Program review remains read-only in this version. Structured Program suggestions are the next implementation step after Provider suggestion QA passes.
+          <strong>Read-only QA:</strong> the right-hand values below are suggestions only.
+          Nothing is being written to the canonical Program record or back to the submission.
+          Direct mappings are proposed automatically; normalization and classification fields remain reviewer decisions.
         </div>
 
+        <h2 class="section-title">Program canonical review</h2>
+
+        <table class="review-table">
+          <thead>
+            <tr>
+              <th>Canonical field</th>
+              <th>Submitted</th>
+              <th>Suggested / Final</th>
+              <th>Rule</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Program_Name</td>
+              <td id="g_sub_name"></td>
+              <td id="g_sug_name" class="suggested"></td>
+              <td><span class="rule-badge">Auto</span><br><span class="muted">Direct mapping</span></td>
+            </tr>
+            <tr>
+              <td>Program_URL</td>
+              <td id="g_sub_url"></td>
+              <td id="g_sug_url" class="suggested"></td>
+              <td><span class="rule-badge">Auto</span><br><span class="muted">Direct mapping</span></td>
+            </tr>
+            <tr>
+              <td>Program_Summary</td>
+              <td id="g_sub_summary"></td>
+              <td id="g_sug_summary" class="suggested"></td>
+              <td><span class="rule-badge">Auto</span><br><span class="muted">Program_Description → Program_Summary</span></td>
+            </tr>
+            <tr>
+              <td>Delivery_Mode</td>
+              <td id="g_sub_delivery"></td>
+              <td id="g_sug_delivery" class="suggested"></td>
+              <td><span class="rule-badge">Auto</span><br><span class="muted">Direct mapping</span></td>
+            </tr>
+            <tr>
+              <td>Days_Offered</td>
+              <td id="g_sub_days"></td>
+              <td id="g_sug_days" class="suggested"></td>
+              <td><span class="rule-badge">Auto</span><br><span class="muted">Direct mapping</span></td>
+            </tr>
+            <tr>
+              <td>Time_of_Day</td>
+              <td id="g_sub_time"></td>
+              <td id="g_sug_time" class="suggested"></td>
+              <td><span class="rule-badge">Auto</span><br><span class="muted">Direct mapping</span></td>
+            </tr>
+            <tr>
+              <td>Cost_Notes</td>
+              <td id="g_sub_costnotes"></td>
+              <td id="g_sug_costnotes" class="suggested"></td>
+              <td><span class="rule-badge">Auto</span><br><span class="muted">Cost_Information → Cost_Notes</span></td>
+            </tr>
+            <tr>
+              <td>Information_Source</td>
+              <td id="g_sub_source"></td>
+              <td id="g_sug_source" class="suggested"></td>
+              <td><span class="rule-badge">Auto</span><br><span class="muted">Submission provenance</span></td>
+            </tr>
+            <tr>
+              <td>Confidence_Status</td>
+              <td id="g_sub_confidence"></td>
+              <td id="g_sug_confidence" class="suggested"></td>
+              <td><span class="rule-badge">Auto</span><br><span class="muted">Provider supplied, not verified</span></td>
+            </tr>
+            <tr>
+              <td>Program_Category</td>
+              <td id="g_sub_category"></td>
+              <td id="g_sug_category" class="review-required"></td>
+              <td><span class="rule-badge">Review</span><br><span class="muted">Classification requires reviewer judgment</span></td>
+            </tr>
+            <tr>
+              <td>Age_Band</td>
+              <td id="g_sub_age"></td>
+              <td id="g_sug_age" class="review-required"></td>
+              <td><span class="rule-badge">Review</span><br><span class="muted">Normalize submitted age text</span></td>
+            </tr>
+            <tr>
+              <td>Primary_Municipality</td>
+              <td id="g_sub_municipality"></td>
+              <td id="g_sug_municipality" class="review-required"></td>
+              <td><span class="rule-badge">Review</span><br><span class="muted">Resolve text to Locations reference</span></td>
+            </tr>
+            <tr>
+              <td>Cost_Basis</td>
+              <td id="g_sub_costbasis"></td>
+              <td id="g_sug_costbasis" class="review-required"></td>
+              <td><span class="rule-badge">Review</span><br><span class="muted">Do not infer billing model from free text</span></td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h2 class="section-title">Submission context</h2>
+
         <div class="field-grid">
-          <div class="label">Program / service name</div>
-          <div class="value" id="Program_Name"></div>
-
-          <div class="label">Program URL</div>
-          <div class="value" id="Program_URL"></div>
-
-          <div class="label">Description</div>
-          <div class="value" id="Program_Description"></div>
-
-          <div class="label">Submitted age range</div>
-          <div class="value" id="Age_Range"></div>
-
-          <div class="label">Days offered</div>
-          <div class="value" id="Days_Offered"></div>
-
-          <div class="label">Time of day</div>
-          <div class="value" id="Time_of_Day"></div>
-
-          <div class="label">Delivery mode</div>
-          <div class="value" id="Delivery_Mode"></div>
-
-          <div class="label">Program municipality</div>
-          <div class="value" id="Municipality"></div>
-
           <div class="label">Service area</div>
           <div class="value" id="Service_Area"></div>
-
-          <div class="label">Cost information</div>
-          <div class="value" id="Cost_Information"></div>
 
           <div class="label">Existing Program match</div>
           <div class="value" id="Existing_Program"></div>
@@ -495,6 +565,47 @@
     );
   }
 
+  function renderProgramSuggestions(record) {
+    put('g_sub_name', record.Program_Name);
+    put('g_sug_name', record.Program_Name);
+
+    put('g_sub_url', record.Program_URL);
+    put('g_sug_url', record.Program_URL);
+
+    put('g_sub_summary', record.Program_Description);
+    put('g_sug_summary', record.Program_Description);
+
+    put('g_sub_delivery', record.Delivery_Mode);
+    put('g_sug_delivery', record.Delivery_Mode);
+
+    put('g_sub_days', record.Days_Offered);
+    put('g_sug_days', record.Days_Offered);
+
+    put('g_sub_time', record.Time_of_Day);
+    put('g_sug_time', record.Time_of_Day);
+
+    put('g_sub_costnotes', record.Cost_Information);
+    put('g_sug_costnotes', record.Cost_Information);
+
+    put('g_sub_source', null, 'Derived from submission');
+    put('g_sug_source', 'Provider submitted');
+
+    put('g_sub_confidence', null, 'Derived from submission');
+    put('g_sug_confidence', 'Provider supplied');
+
+    put('g_sub_category', null, 'Not collected as canonical category');
+    put('g_sug_category', 'Reviewer input required');
+
+    put('g_sub_age', record.Age_Range);
+    put('g_sug_age', 'Reviewer normalization required');
+
+    put('g_sub_municipality', record.Municipality);
+    put('g_sug_municipality', 'Reviewer must resolve to a Locations record');
+
+    put('g_sub_costbasis', record.Cost_Information);
+    put('g_sug_costbasis', 'Reviewer input required');
+  }
+
   function render(record) {
     if (!record) {
       document.getElementById('waiting').style.display = 'block';
@@ -527,6 +638,7 @@
     put('programActionBadge', 'Program: ' + programAction);
 
     renderProviderSuggestions(record);
+    renderProgramSuggestions(record);
 
     const contextFields = [
       'Contact_Name',
@@ -535,16 +647,7 @@
     ];
 
     const programFields = [
-      'Program_Name',
-      'Program_URL',
-      'Program_Description',
-      'Age_Range',
-      'Days_Offered',
-      'Time_of_Day',
-      'Delivery_Mode',
-      'Municipality',
       'Service_Area',
-      'Cost_Information',
       'Existing_Program'
     ];
 
@@ -565,7 +668,7 @@
 
     document.getElementById('programMatchNotice').textContent =
       hasValue(record.Existing_Program)
-        ? 'An existing Program has been matched. Program comparison and canonical suggestions are not yet enabled in this version.'
+        ? 'An existing Program has been matched. This read-only version shows submission-based suggestions; canonical value comparison will be added when broader document read access is introduced.'
         : 'No existing Program is matched. Suggested action: CREATE Program after reviewer approval.';
   }
 
