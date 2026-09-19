@@ -9,9 +9,7 @@
   <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
 
   <style>
-    * {
-      box-sizing: border-box;
-    }
+    * { box-sizing: border-box; }
 
     body {
       margin: 0;
@@ -83,17 +81,10 @@
       border-bottom: 3px solid #333;
     }
 
-    .content {
-      padding: 22px;
-    }
+    .content { padding: 22px; }
 
-    .panel {
-      display: none;
-    }
-
-    .panel.active {
-      display: block;
-    }
+    .panel { display: none; }
+    .panel.active { display: block; }
 
     .notice {
       padding: 12px 14px;
@@ -102,6 +93,67 @@
       border-radius: 6px;
       background: #fafafa;
       font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .section-title {
+      margin: 20px 0 8px;
+      font-size: 15px;
+    }
+
+    .review-table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+      border: 1px solid #ddd;
+    }
+
+    .review-table th,
+    .review-table td {
+      padding: 10px 12px;
+      border-bottom: 1px solid #e7e7e7;
+      border-right: 1px solid #eee;
+      vertical-align: top;
+      text-align: left;
+      word-break: break-word;
+      font-size: 13px;
+    }
+
+    .review-table th {
+      background: #f5f5f5;
+      font-weight: 700;
+    }
+
+    .review-table th:nth-child(1) { width: 20%; }
+    .review-table th:nth-child(2) { width: 27%; }
+    .review-table th:nth-child(3) { width: 30%; }
+    .review-table th:nth-child(4) { width: 23%; }
+
+    .suggested {
+      font-weight: 600;
+    }
+
+    .rule-badge {
+      display: inline-block;
+      border: 1px solid #c7c7c7;
+      border-radius: 12px;
+      padding: 2px 7px;
+      font-size: 11px;
+      margin-bottom: 4px;
+      background: #fff;
+    }
+
+    .review-required {
+      font-weight: 600;
+    }
+
+    .muted {
+      color: #777;
+    }
+
+    .empty {
+      color: #888;
+      font-style: italic;
     }
 
     .field-grid {
@@ -126,30 +178,57 @@
       word-break: break-word;
     }
 
-    .empty {
-      color: #888;
-      font-style: italic;
-    }
-
     .waiting {
       padding: 50px 20px;
       text-align: center;
       color: #777;
     }
 
-    @media (max-width: 700px) {
-      .field-grid {
-        grid-template-columns: 1fr;
+    @media (max-width: 760px) {
+      body { padding: 8px; }
+
+      .review-table,
+      .review-table thead,
+      .review-table tbody,
+      .review-table th,
+      .review-table td,
+      .review-table tr {
+        display: block;
       }
+
+      .review-table thead {
+        position: absolute;
+        left: -9999px;
+      }
+
+      .review-table tr {
+        border-bottom: 2px solid #ddd;
+      }
+
+      .review-table td {
+        border-right: none;
+      }
+
+      .review-table td::before {
+        display: block;
+        font-weight: 700;
+        color: #555;
+        margin-bottom: 3px;
+      }
+
+      .review-table td:nth-child(1)::before { content: "Canonical field"; }
+      .review-table td:nth-child(2)::before { content: "Submitted"; }
+      .review-table td:nth-child(3)::before { content: "Suggested / Final"; }
+      .review-table td:nth-child(4)::before { content: "Rule"; }
+
+      .field-grid { grid-template-columns: 1fr; }
 
       .label {
         border-bottom: none;
         padding-bottom: 2px;
       }
 
-      .value {
-        padding-top: 2px;
-      }
+      .value { padding-top: 2px; }
     }
   </style>
 </head>
@@ -160,7 +239,7 @@
 
   <div class="header">
     <h1>Project ADry — Review & Promote</h1>
-    <p>Read-only MVP prototype · Provider submission review</p>
+    <p>Phase 8B.1 · Read-only provider canonical-value suggestions</p>
   </div>
 
   <div id="waiting" class="waiting">
@@ -188,18 +267,80 @@
 
         <div class="notice" id="providerMatchNotice"></div>
 
+        <div class="notice">
+          <strong>Read-only QA:</strong> the right-hand values below are suggestions only.
+          Nothing is being written to the canonical Provider record or back to the submission.
+          Deterministic values are proposed automatically; judgment fields are deliberately left for reviewer input.
+        </div>
+
+        <h2 class="section-title">Provider canonical review</h2>
+
+        <table class="review-table">
+          <thead>
+            <tr>
+              <th>Canonical field</th>
+              <th>Submitted</th>
+              <th>Suggested / Final</th>
+              <th>Rule</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Provider_Name</td>
+              <td id="p_sub_name"></td>
+              <td id="p_sug_name" class="suggested"></td>
+              <td><span class="rule-badge">Auto</span><br><span class="muted">Direct mapping</span></td>
+            </tr>
+            <tr>
+              <td>Website</td>
+              <td id="p_sub_website"></td>
+              <td id="p_sug_website" class="suggested"></td>
+              <td><span class="rule-badge">Auto</span><br><span class="muted">Direct mapping</span></td>
+            </tr>
+            <tr>
+              <td>Organization_Type</td>
+              <td id="p_sub_orgtype"></td>
+              <td id="p_sug_orgtype" class="review-required"></td>
+              <td><span class="rule-badge">Review</span><br><span class="muted">Do not infer</span></td>
+            </tr>
+            <tr>
+              <td>Primary_Municipality</td>
+              <td id="p_sub_municipality"></td>
+              <td id="p_sug_municipality" class="review-required"></td>
+              <td><span class="rule-badge">Review</span><br><span class="muted">Program location is not provider location</span></td>
+            </tr>
+            <tr>
+              <td>Information_Source</td>
+              <td id="p_sub_source"></td>
+              <td id="p_sug_source" class="suggested"></td>
+              <td><span class="rule-badge">Auto</span><br><span class="muted">Submission provenance</span></td>
+            </tr>
+            <tr>
+              <td>Confidence_Status</td>
+              <td id="p_sub_confidence"></td>
+              <td id="p_sug_confidence" class="suggested"></td>
+              <td><span class="rule-badge">Auto</span><br><span class="muted">Provider supplied, not verified</span></td>
+            </tr>
+            <tr>
+              <td>Provider_Participation_Level</td>
+              <td id="p_sub_participation"></td>
+              <td id="p_sug_participation" class="suggested"></td>
+              <td><span class="rule-badge">Auto</span><br><span class="muted">Default community listing</span></td>
+            </tr>
+            <tr>
+              <td>Primary_Email</td>
+              <td id="p_sub_email"></td>
+              <td id="p_sug_email" class="review-required"></td>
+              <td><span class="rule-badge">Review</span><br><span class="muted">Contact email is not automatically the provider's primary email</span></td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h2 class="section-title">Submission context</h2>
+
         <div class="field-grid">
-          <div class="label">Provider name</div>
-          <div class="value" id="Provider_Name"></div>
-
-          <div class="label">Organization website</div>
-          <div class="value" id="Website"></div>
-
           <div class="label">Submitted contact</div>
           <div class="value" id="Contact_Name"></div>
-
-          <div class="label">Contact email</div>
-          <div class="value" id="Contact_Email"></div>
 
           <div class="label">Contact role</div>
           <div class="value" id="Contact_Role"></div>
@@ -213,6 +354,10 @@
       <div id="program" class="panel">
 
         <div class="notice" id="programMatchNotice"></div>
+
+        <div class="notice">
+          Program review remains read-only in this version. Structured Program suggestions are the next implementation step after Provider suggestion QA passes.
+        </div>
 
         <div class="field-grid">
           <div class="label">Program / service name</div>
@@ -254,8 +399,7 @@
       <div id="claims" class="panel">
 
         <div class="notice">
-          These fields may contain eligibility, funding or other claims that
-          require human review before they become trusted canonical knowledge.
+          These fields may contain eligibility, funding or other claims that require human review before they become trusted canonical knowledge.
         </div>
 
         <div class="field-grid">
@@ -279,43 +423,31 @@
 </div>
 
 <script>
-
   grist.ready({
     requiredAccess: 'read table'
   });
 
   function displayValue(value) {
-    if (
-      value === null ||
-      value === undefined ||
-      value === ''
-    ) {
+    if (value === null || value === undefined || value === '') {
       return null;
     }
 
     if (Array.isArray(value)) {
-      const values =
-        value.length && value[0] === 'L'
-          ? value.slice(1)
-          : value;
-
+      const values = value.length && value[0] === 'L' ? value.slice(1) : value;
       return values.join(', ');
     }
 
     return String(value);
   }
 
-  function put(id, value) {
+  function put(id, value, emptyText = 'Not provided') {
     const element = document.getElementById(id);
-
-    if (!element) {
-      return;
-    }
+    if (!element) return;
 
     const result = displayValue(value);
 
     if (result === null) {
-      element.textContent = 'Not provided';
+      element.textContent = emptyText;
       element.classList.add('empty');
     } else {
       element.textContent = result;
@@ -324,16 +456,46 @@
   }
 
   function hasValue(value) {
-    return !(
-      value === null ||
-      value === undefined ||
-      value === '' ||
-      value === 0
+    return !(value === null || value === undefined || value === '' || value === 0);
+  }
+
+  function renderProviderSuggestions(record) {
+    put('p_sub_name', record.Provider_Name);
+    put('p_sug_name', record.Provider_Name);
+
+    put('p_sub_website', record.Website);
+    put('p_sug_website', record.Website);
+
+    put('p_sub_orgtype', null, 'Not collected in submission');
+    put('p_sug_orgtype', 'Reviewer input required');
+
+    put(
+      'p_sub_municipality',
+      record.Municipality,
+      'No program municipality supplied'
+    );
+    put(
+      'p_sug_municipality',
+      'Reviewer input required — do not auto-map program municipality'
+    );
+
+    put('p_sub_source', null, 'Derived from submission');
+    put('p_sug_source', 'Provider submitted');
+
+    put('p_sub_confidence', null, 'Derived from submission');
+    put('p_sug_confidence', 'Provider supplied');
+
+    put('p_sub_participation', null, 'No participation level supplied');
+    put('p_sug_participation', 'Community listing');
+
+    put('p_sub_email', record.Contact_Email);
+    put(
+      'p_sug_email',
+      'Reviewer decision required — do not auto-map Contact_Email'
     );
   }
 
   function render(record) {
-
     if (!record) {
       document.getElementById('waiting').style.display = 'block';
       document.getElementById('workspace').style.display = 'none';
@@ -361,21 +523,13 @@
       displayValue(record.Program_Action) ||
       (hasValue(record.Existing_Program) ? 'Review existing' : 'Create');
 
-    put(
-      'providerActionBadge',
-      'Provider: ' + providerAction
-    );
+    put('providerActionBadge', 'Provider: ' + providerAction);
+    put('programActionBadge', 'Program: ' + programAction);
 
-    put(
-      'programActionBadge',
-      'Program: ' + programAction
-    );
+    renderProviderSuggestions(record);
 
-    const providerFields = [
-      'Provider_Name',
-      'Website',
+    const contextFields = [
       'Contact_Name',
-      'Contact_Email',
       'Contact_Role',
       'Existing_Provider'
     ];
@@ -401,18 +555,18 @@
       'Review_Notes'
     ];
 
-    [...providerFields, ...programFields, ...claimFields]
+    [...contextFields, ...programFields, ...claimFields]
       .forEach(field => put(field, record[field]));
 
     document.getElementById('providerMatchNotice').textContent =
       hasValue(record.Existing_Provider)
-        ? 'An existing Provider has been matched. The next version will compare current canonical values with the submitted information.'
-        : 'No existing Provider is matched. Suggested action: CREATE Provider.';
+        ? 'An existing Provider has been matched. This read-only version shows submission-based suggestions only; canonical comparison will be added after the required access model is tested.'
+        : 'No existing Provider is matched. Suggested action: CREATE Provider after reviewer approval.';
 
     document.getElementById('programMatchNotice').textContent =
       hasValue(record.Existing_Program)
-        ? 'An existing Program has been matched. The next version will compare current canonical values with the submitted information.'
-        : 'No existing Program is matched. Suggested action: CREATE Program.';
+        ? 'An existing Program has been matched. Program comparison and canonical suggestions are not yet enabled in this version.'
+        : 'No existing Program is matched. Suggested action: CREATE Program after reviewer approval.';
   }
 
   grist.onRecord(function(record) {
@@ -420,9 +574,7 @@
   });
 
   document.querySelectorAll('.tab').forEach(button => {
-
     button.addEventListener('click', function() {
-
       document
         .querySelectorAll('.tab')
         .forEach(tab => tab.classList.remove('active'));
@@ -432,14 +584,9 @@
         .forEach(panel => panel.classList.remove('active'));
 
       button.classList.add('active');
-
-      document
-        .getElementById(button.dataset.tab)
-        .classList.add('active');
+      document.getElementById(button.dataset.tab).classList.add('active');
     });
-
   });
-
 </script>
 
 </body>
