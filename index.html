@@ -413,7 +413,7 @@
 <div class="shell">
   <div class="header">
     <h1>Project ADry — Review & Promote</h1>
-    <p>Phase 8D.1c · Repair audited blank Provider + resume Program promotion</p>
+    <p>Phase 8D.2 · Existing Provider / Program update promotion + audit</p>
   </div>
 
   <div id="waiting" class="waiting">
@@ -865,7 +865,7 @@
       <div id="approvalStatus" class="approval-status"></div>
       <div id="promotionStatus" class="approval-status"></div>
       <div class="approval-note">
-        Phase 8D.1 promotion supports approved <strong>Create + Create</strong> submissions only. It creates the Provider first, then the linked Program, writes separate audit-log rows, and completes the submission. Eligibility and funding claims marked Verification required are not promoted.
+        Phase 8D.2 supports approved <strong>Create + Create</strong> plus matched <strong>Update / No change</strong> Provider and Program decisions. Updates write only approved changed fields, preserve previous values in the audit log, and block if the canonical record changed after the review draft was saved. Eligibility and funding claims marked Verification required are not promoted.
       </div>
     </div>
 
@@ -886,6 +886,11 @@
   let isRendering = false;
   let lastReadiness = null;
   let promotionInProgress = false;
+  let currentCanonicalContext = {
+    provider: null,
+    program: null,
+    locationsById: new Map()
+  };
   let promotionRecovery = {
     safeProviderResume: false,
     repairBlankProvider: false,
@@ -1178,6 +1183,93 @@
     const text = (displayValue(value) || '').trim();
     if (!text) throw new Error(label + ' is required for promotion.');
     return text;
+  }
+
+  function scalarCompare(value) {
+    return (displayValue(value) || '').trim();
+  }
+
+  function choiceCompare(value) {
+    return normalizeChoiceListValue(value).map(v => String(v).trim()).filter(Boolean);
+  }
+
+  function sameChoiceList(a, b) {
+    return JSON.stringify(choiceCompare(a)) === JSON.stringify(choiceCompare(b));
+  }
+
+  function sameFieldValue(field, currentValue, desiredValue) {
+    if (['Age_Band', 'Delivery_Mode', 'Days_Offered', 'Time_of_Day'].includes(field)) {
+      return sameChoiceList(currentValue, desiredValue);
+    }
+    if (['Primary_Municipality', 'Provider'].includes(field)) {
+      return refRowId(currentValue) === (typeof desiredValue === 'number' ? desiredValue : refRowId(desiredValue));
+    }
+    return scalarCompare(currentValue) === scalarCompare(desiredValue);
+  }
+
+  function friendlyCanonicalValue(field, value, locationsById) {
+    if (field === 'Primary_Municipality') {
+      return locationLabel(value, locationsById);
+    }
+    if (field === 'Provider') {
+      return refRowId(value);
+    }
+    if (['Age_Band', 'Delivery_Mode', 'Days_Offered', 'Time_of_Day'].includes(field)) {
+      return choiceCompare(value);
+    }
+    return displayValue(value) || '';
+  }
+
+  function buildBaseline(entity, locationsById) {
+    if (!entity) return null;
+    const result = {};
+    Object.keys(entity).forEach(field => {
+      if (field === 'id') return;
+      result[field] = friendlyCanonicalValue(field, entity[field], locationsById);
+    });
+    result.__row_id = entity.id;
+    return result;
+  }
+
+  function baselineMatchesLive(baseline, liveRow, fields, locationsById) {
+    if (!baseline || !liveRow) return false;
+    if (Number(baseline.__row_id) !== Number(liveRow.id)) return false;
+
+    return fields.every(field => {
+      const liveFriendly = friendlyCanonicalValue(field, liveRow[field], locationsById);
+      const base = baseline[field];
+
+      if (Array.isArray(liveFriendly) || Array.isArray(base)) {
+        return JSON.stringify(liveFriendly || []) === JSON.stringify(base || []);
+      }
+      return scalarCompare(liveFriendly) === scalarCompare(base);
+    });
+  }
+
+  function collectChangedFields(liveRow, desiredFields, locationsById) {
+    const changed = {};
+    const previous = {};
+    const applied = {};
+
+    Object.entries(desiredFields).forEach(([field, desiredValue]) => {
+      if (!sameFieldValue(field, liveRow[field], desiredValue)) {
+        changed[field] = desiredValue;
+        previous[field] = friendlyCanonicalValue(field, liveRow[field], locationsById);
+        applied[field] =
+          field === 'Primary_Municipality'
+            ? locationLabel(desiredValue, locationsById)
+            : (field === 'Provider'
+                ? desiredValue
+                : friendlyCanonicalValue(field, desiredValue, locationsById));
+      }
+    });
+
+    return {
+      changed,
+      previous,
+      applied,
+      fields: Object.keys(changed)
+    };
   }
 
   function resolveLocationRowId(locationText, locations, label) {
@@ -1484,6 +1576,10 @@
     const providerAction = getControl('providerAction');
     const programAction = getControl('programAction');
     const createCreate = providerAction === 'Create' && programAction === 'Create';
+    const updatePair =
+      ['Update', 'No change'].includes(providerAction) &&
+      ['Update', 'No change'].includes(programAction) &&
+      (providerAction === 'Update' || programAction === 'Update');
     const noExistingRefs =
       currentRecord &&
       !hasValue(currentRecord.Existing_Provider) &&
@@ -1504,8 +1600,9 @@
       !result.ready ||
       !isReadyStatus ||
       isDirty ||
-      !createCreate ||
-      !(noExistingRefs || safeResume) ||
+      !(createCreate || updatePair) ||
+      (createCreate && !(noExistingRefs || safeResume)) ||
+      (updatePair && (!hasValue(currentRecord.Existing_Provider) || !hasValue(currentRecord.Existing_Program))) ||
       alreadySucceeded;
 
     const persisted = currentRecord ? persistedPromotionMessage(currentRecord) : null;
@@ -1526,10 +1623,12 @@
           : 'The widget will continue with Program creation.');
     } else if (approved && createCreate && noExistingRefs && isReadyStatus && result.ready && !isDirty) {
       promotionStatus.textContent = 'Approved Create/Create submission is ready for canonical promotion.';
-    } else if (approved && !createCreate) {
-      promotionStatus.textContent = 'Phase 8D.1 only promotes Provider Action = Create and Program Action = Create.';
-    } else if (approved && !(noExistingRefs || safeResume)) {
-      promotionStatus.textContent = 'Promotion is blocked because Existing Provider/Program references cannot be proven as this submission\'s own partial promotion.';
+    } else if (approved && updatePair && isReadyStatus && result.ready && !isDirty) {
+      promotionStatus.textContent = 'Approved matched-record update is ready for canonical promotion. Only changed approved fields will be written.';
+    } else if (approved && createCreate && !(noExistingRefs || safeResume)) {
+      promotionStatus.textContent = 'Create/Create promotion is blocked because Existing Provider/Program references cannot be proven as this submission\'s own partial promotion.';
+    } else if (approved && !createCreate && !updatePair) {
+      promotionStatus.textContent = 'This phase supports Create/Create or matched Update/No change combinations with at least one Update.';
     } else {
       promotionStatus.textContent = 'Canonical promotion becomes available after readiness and human approval.';
     }
@@ -1675,7 +1774,7 @@
     }
   }
 
-  async function promoteApprovedSubmission() {
+  async function promoteCreateCreateSubmission() {
     if (!currentRecord || !currentRecord.id || promotionInProgress) return;
 
     promotionInProgress = true;
@@ -2116,6 +2215,382 @@
     }
   }
 
+  async function recordUpdatePromotionFailure(rawSubmission, entityType, action, message) {
+    const now = Date.now() / 1000;
+    const appliedBy =
+      displayValue(rawSubmission.Approved_By) ||
+      displayValue(rawSubmission.Approved_By_Email) ||
+      'Approved reviewer';
+
+    try {
+      await grist.docApi.applyUserActions([
+        ['UpdateRecord', 'Provider_Submissions', rawSubmission.id, {
+          Applied_By: appliedBy,
+          Applied_On: now,
+          Promotion_Result: 'Failed',
+          Promotion_Error: message
+        }],
+        ['AddRecord', 'KB_Promotion_Log', null, {
+          Submission_Type: 'Provider Submission',
+          Source_Submission_ID: sourceSubmissionId(rawSubmission),
+          Entity_Type: entityType,
+          Action: action || 'Update',
+          Canonical_ID: '',
+          Canonical_Row_ID: null,
+          Approved_By: displayValue(rawSubmission.Approved_By) || '',
+          Approved_By_Email: displayValue(rawSubmission.Approved_By_Email) || '',
+          Approved_On: dateTimeSeconds(rawSubmission.Approved_On),
+          Applied_By: appliedBy,
+          Applied_On: now,
+          Result: 'Failed',
+          Changed_Fields: '',
+          Previous_Values: '{}',
+          Applied_Values: '{}',
+          Suggestion_Source: 'Rules',
+          Human_Decision: 'Approved',
+          Override_Reason: '',
+          Implementation_Version: '8D.2',
+          Error_Detail: message
+        }]
+      ]);
+    } catch (auditErr) {
+      console.error('Could not write update-promotion failure audit', auditErr);
+    }
+  }
+
+  async function promoteMatchedUpdateSubmission() {
+    if (!currentRecord || !currentRecord.id || promotionInProgress) return;
+
+    promotionInProgress = true;
+    updateReadiness();
+    setSaveStatus('Rechecking approved update against current canonical records...');
+
+    let rawSubmission = null;
+    let stage = 'Provider';
+    let stageAction = 'Update';
+
+    try {
+      if (isDirty) {
+        throw new Error('The review has unsaved changes. Promotion is blocked.');
+      }
+
+      const [submissionRows, providerRows, programRows, locations] = await Promise.all([
+        fetchTableRows('Provider_Submissions'),
+        fetchTableRows('Providers'),
+        fetchTableRows('Programs'),
+        fetchTableRows('Locations')
+      ]);
+
+      rawSubmission = submissionRows.find(row => row.id === currentRecord.id);
+      if (!rawSubmission) throw new Error('The selected Provider_Submissions row could not be reloaded.');
+
+      const providerAction = displayValue(rawSubmission.Provider_Action);
+      const programAction = displayValue(rawSubmission.Program_Action);
+      const supported =
+        ['Update', 'No change'].includes(providerAction) &&
+        ['Update', 'No change'].includes(programAction) &&
+        (providerAction === 'Update' || programAction === 'Update');
+
+      if (!supported) {
+        throw new Error('Phase 8D.2 update promotion requires Update/No change decisions with at least one Update.');
+      }
+      if (!boolValue(rawSubmission.Promotion_Approved)) {
+        throw new Error('Promotion_Approved is not true on the source submission.');
+      }
+      if (displayValue(rawSubmission.Review_Status) !== 'Ready to Promote') {
+        throw new Error('Review_Status must be Ready to Promote.');
+      }
+      if (!hasValue(rawSubmission.Approved_By) ||
+          !hasValue(rawSubmission.Approved_By_Email) ||
+          !hasValue(rawSubmission.Approved_On)) {
+        throw new Error('Approval stamps are incomplete.');
+      }
+      if (displayValue(rawSubmission.Promotion_Result) === 'Success' ||
+          displayValue(rawSubmission.Review_Status) === 'Completed') {
+        throw new Error('This submission has already been promoted.');
+      }
+
+      const providerRowId = refRowId(rawSubmission.Existing_Provider);
+      const programRowId = refRowId(rawSubmission.Existing_Program);
+      if (!providerRowId || !programRowId) {
+        throw new Error('Matched update promotion requires both Existing_Provider and Existing_Program references.');
+      }
+
+      const liveProvider = providerRows.find(row => row.id === providerRowId) || null;
+      const liveProgram = programRows.find(row => row.id === programRowId) || null;
+      if (!liveProvider || !liveProgram) {
+        throw new Error('One or both matched canonical records no longer exist.');
+      }
+      if (refRowId(liveProgram.Provider) !== providerRowId) {
+        throw new Error('Matched Program is not linked to the matched Provider. Resolve the relationship before promotion.');
+      }
+
+      const providerDraft = parseDraft(rawSubmission.Provider_Review_Draft);
+      const programDraft = parseDraft(rawSubmission.Program_Review_Draft);
+      if (!providerDraft || !programDraft) {
+        throw new Error('Saved Provider and Program review drafts are required.');
+      }
+      if (providerDraft.action !== providerAction || programDraft.action !== programAction) {
+        throw new Error('Saved draft actions no longer match the approved submission actions.');
+      }
+
+      const p = providerDraft.fields || {};
+      const g = programDraft.fields || {};
+
+      const providerDesired = {
+        Provider_Name: requireText(p.Provider_Name, 'Provider Name'),
+        Website: scalarCompare(p.Website),
+        Organization_Type: scalarCompare(p.Organization_Type),
+        Primary_Municipality: resolveLocationRowId(
+          requireText(p.Primary_Municipality, 'Provider Primary Municipality'),
+          locations,
+          'Provider Primary Municipality'
+        ),
+        Information_Source: requireText(p.Information_Source, 'Provider Information Source'),
+        Confidence_Status: requireText(p.Confidence_Status, 'Provider Confidence Status'),
+        Provider_Participation_Level: requireText(p.Provider_Participation_Level, 'Provider Participation Level'),
+        Primary_Email: scalarCompare(p.Primary_Email)
+      };
+
+      const programDesired = {
+        Provider: providerRowId,
+        Program_Name: requireText(g.Program_Name, 'Program Name'),
+        Program_URL: scalarCompare(g.Program_URL),
+        Program_Summary: requireText(g.Program_Summary, 'Program Summary'),
+        Delivery_Mode: choiceListCell([requireText(g.Delivery_Mode, 'Program Delivery Mode')]),
+        Days_Offered: choiceListCell(g.Days_Offered),
+        Time_of_Day: choiceListCell(g.Time_of_Day),
+        Cost_Notes: scalarCompare(g.Cost_Notes),
+        Information_Source: requireText(g.Information_Source, 'Program Information Source'),
+        Confidence_Status: requireText(g.Confidence_Status, 'Program Confidence Status'),
+        Program_Category: requireText(g.Program_Category, 'Program Category'),
+        Age_Band: choiceListCell(g.Age_Band),
+        Primary_Municipality: resolveLocationRowId(
+          requireText(g.Primary_Municipality, 'Program Primary Municipality'),
+          locations,
+          'Program Primary Municipality'
+        ),
+        Cost_Basis: scalarCompare(g.Cost_Basis)
+      };
+
+      if (!choiceCompare(programDesired.Age_Band).length) {
+        throw new Error('Program Age Band is required.');
+      }
+
+      const providerDiff = providerAction === 'Update'
+        ? collectChangedFields(liveProvider, providerDesired, new Map(locations.map(row => [row.id, row])))
+        : { changed: {}, previous: {}, applied: {}, fields: [] };
+
+      const programDiff = programAction === 'Update'
+        ? collectChangedFields(liveProgram, programDesired, new Map(locations.map(row => [row.id, row])))
+        : { changed: {}, previous: {}, applied: {}, fields: [] };
+
+      if (providerAction === 'Update' && !providerDiff.fields.length) {
+        throw new Error('Provider Action is Update, but the approved Provider values are identical to the current canonical Provider. Change the action to No change and re-approve.');
+      }
+      if (programAction === 'Update' && !programDiff.fields.length) {
+        throw new Error('Program Action is Update, but the approved Program values are identical to the current canonical Program. Change the action to No change and re-approve.');
+      }
+
+      const providerBaseline = providerDraft.baseline || null;
+      const programBaseline = programDraft.baseline || null;
+
+      if (providerAction === 'Update' && !providerBaseline) {
+        throw new Error('Provider update draft has no canonical baseline. Reopen the review, save a fresh draft, and approve it again before updating.');
+      }
+      if (programAction === 'Update' && !programBaseline) {
+        throw new Error('Program update draft has no canonical baseline. Reopen the review, save a fresh draft, and approve it again before updating.');
+      }
+
+      if (
+        providerAction === 'Update' &&
+        !baselineMatchesLive(providerBaseline, liveProvider, providerDiff.fields, new Map(locations.map(row => [row.id, row])))
+      ) {
+        throw new Error('The canonical Provider changed after this review draft was saved. Re-review the current KB values before promoting.');
+      }
+
+      if (
+        programAction === 'Update' &&
+        !baselineMatchesLive(programBaseline, liveProgram, programDiff.fields, new Map(locations.map(row => [row.id, row])))
+      ) {
+        throw new Error('The canonical Program changed after this review draft was saved. Re-review the current KB values before promoting.');
+      }
+
+      const lines = [];
+      if (providerAction === 'Update') lines.push('Provider fields: ' + providerDiff.fields.join(', '));
+      if (programAction === 'Update') lines.push('Program fields: ' + programDiff.fields.join(', '));
+
+      const confirmed = window.confirm(
+        'Promote these approved canonical updates now?\n\n' +
+        lines.join('\n') +
+        '\n\nOnly the listed changed fields will be written. Eligibility and funding claims remain outside this promotion.'
+      );
+      if (!confirmed) {
+        setSaveStatus('Update promotion cancelled. No canonical records were changed.');
+        return;
+      }
+
+      const appliedBy =
+        displayValue(rawSubmission.Approved_By) ||
+        displayValue(rawSubmission.Approved_By_Email) ||
+        'Approved reviewer';
+      const auditActions = [];
+      const updateActions = [];
+
+      if (providerAction === 'Update') {
+        stage = 'Provider';
+        stageAction = 'Update';
+        updateActions.push(['UpdateRecord', 'Providers', providerRowId, providerDiff.changed]);
+      }
+
+      if (programAction === 'Update') {
+        stage = 'Program';
+        stageAction = 'Update';
+        updateActions.push(['UpdateRecord', 'Programs', programRowId, programDiff.changed]);
+      }
+
+      if (updateActions.length) {
+        setSaveStatus('Applying approved canonical updates...');
+        await grist.docApi.applyUserActions(updateActions);
+      }
+
+      const [verifiedProvider, verifiedProgram] = await Promise.all([
+        fetchRowById('Providers', providerRowId),
+        fetchRowById('Programs', programRowId)
+      ]);
+
+      if (providerAction === 'Update') {
+        const postProvider = collectChangedFields(verifiedProvider, providerDesired, new Map(locations.map(row => [row.id, row])));
+        if (postProvider.fields.length) {
+          throw new Error('Provider update was sent but one or more approved values did not persist: ' + postProvider.fields.join(', '));
+        }
+      }
+      if (programAction === 'Update') {
+        const postProgram = collectChangedFields(verifiedProgram, programDesired, new Map(locations.map(row => [row.id, row])));
+        if (postProgram.fields.length) {
+          throw new Error('Program update was sent but one or more approved values did not persist: ' + postProgram.fields.join(', '));
+        }
+      }
+
+      const now = Date.now() / 1000;
+
+      if (providerAction === 'Update') {
+        auditActions.push(['AddRecord', 'KB_Promotion_Log', null, {
+          Submission_Type: 'Provider Submission',
+          Source_Submission_ID: sourceSubmissionId(rawSubmission),
+          Entity_Type: 'Provider',
+          Action: 'Update',
+          Canonical_ID: displayValue(verifiedProvider.Provider_ID) || '',
+          Canonical_Row_ID: providerRowId,
+          Approved_By: displayValue(rawSubmission.Approved_By) || '',
+          Approved_By_Email: displayValue(rawSubmission.Approved_By_Email) || '',
+          Approved_On: dateTimeSeconds(rawSubmission.Approved_On),
+          Applied_By: appliedBy,
+          Applied_On: now,
+          Result: 'Success',
+          Changed_Fields: providerDiff.fields.join('\n'),
+          Previous_Values: JSON.stringify(providerDiff.previous),
+          Applied_Values: JSON.stringify(providerDiff.applied),
+          Suggestion_Source: displayValue(providerDraft.suggestion_source) || 'Rules',
+          Human_Decision: 'Approved',
+          Override_Reason: '',
+          Implementation_Version: '8D.2',
+          Error_Detail: ''
+        }]);
+      }
+
+      if (programAction === 'Update') {
+        auditActions.push(['AddRecord', 'KB_Promotion_Log', null, {
+          Submission_Type: 'Provider Submission',
+          Source_Submission_ID: sourceSubmissionId(rawSubmission),
+          Entity_Type: 'Program',
+          Action: 'Update',
+          Canonical_ID: displayValue(verifiedProgram.Program_ID) || '',
+          Canonical_Row_ID: programRowId,
+          Approved_By: displayValue(rawSubmission.Approved_By) || '',
+          Approved_By_Email: displayValue(rawSubmission.Approved_By_Email) || '',
+          Approved_On: dateTimeSeconds(rawSubmission.Approved_On),
+          Applied_By: appliedBy,
+          Applied_On: now,
+          Result: 'Success',
+          Changed_Fields: programDiff.fields.join('\n'),
+          Previous_Values: JSON.stringify(programDiff.previous),
+          Applied_Values: JSON.stringify(programDiff.applied),
+          Suggestion_Source: displayValue(programDraft.suggestion_source) || 'Rules',
+          Human_Decision: 'Approved',
+          Override_Reason: '',
+          Implementation_Version: '8D.2',
+          Error_Detail: ''
+        }]);
+      }
+
+      auditActions.push(['UpdateRecord', 'Provider_Submissions', rawSubmission.id, {
+        Applied_By: appliedBy,
+        Applied_On: now,
+        Promotion_Result: 'Success',
+        Promotion_Error: '',
+        Review_Status: 'Completed'
+      }]);
+
+      await grist.docApi.applyUserActions(auditActions);
+
+      currentRecord.Applied_By = appliedBy;
+      currentRecord.Applied_On = now;
+      currentRecord.Promotion_Result = 'Success';
+      currentRecord.Promotion_Error = '';
+      currentRecord.Review_Status = 'Completed';
+      put('statusBadge', 'Status: Completed');
+
+      setSaveStatus(
+        'Update promotion complete. ' +
+        (providerAction === 'Update' ? 'Provider updated' : 'Provider unchanged') +
+        '; ' +
+        (programAction === 'Update' ? 'Program updated' : 'Program unchanged') +
+        '. Audit log written.',
+        'success'
+      );
+    } catch (err) {
+      console.error('Phase 8D.2 update promotion failed', err);
+      const message = err && err.message ? err.message : String(err);
+      if (rawSubmission) {
+        await recordUpdatePromotionFailure(rawSubmission, stage, stageAction, message);
+      }
+      const failureMessage = 'Update promotion stopped at ' + stage + ': ' + message;
+      setSaveStatus(failureMessage, 'error');
+      window.alert(failureMessage);
+    } finally {
+      promotionInProgress = false;
+      updateReadiness();
+    }
+  }
+
+  async function promoteApprovedSubmission() {
+    if (!currentRecord || promotionInProgress) return;
+
+    const providerAction = getControl('providerAction');
+    const programAction = getControl('programAction');
+
+    if (providerAction === 'Create' && programAction === 'Create') {
+      await promoteCreateCreateSubmission();
+      return;
+    }
+
+    const updatePair =
+      ['Update', 'No change'].includes(providerAction) &&
+      ['Update', 'No change'].includes(programAction) &&
+      (providerAction === 'Update' || programAction === 'Update');
+
+    if (updatePair) {
+      await promoteMatchedUpdateSubmission();
+      return;
+    }
+
+    setSaveStatus(
+      'Unsupported promotion combination for Phase 8D.2. Use Create/Create or matched Update/No change with at least one Update.',
+      'error'
+    );
+  }
+
   function inferredEntityAction(existingReference) {
     return hasValue(existingReference) ? '' : 'Create';
   }
@@ -2150,6 +2625,7 @@
 
     const currentProvider = canonical.provider;
     const currentProgram = canonical.program;
+    currentCanonicalContext = canonical;
 
     promotionRecovery = await determinePromotionRecovery(record);
 
@@ -2421,9 +2897,13 @@
 
   function collectProviderDraft() {
     return {
-      version: '8D.1',
+      version: '8D.2',
       suggestion_source: 'Rules',
       action: getControl('providerAction'),
+      baseline: buildBaseline(
+        currentCanonicalContext.provider,
+        currentCanonicalContext.locationsById
+      ),
       fields: {
         Provider_Name: getControl('p_final_name'),
         Website: getControl('p_final_website'),
@@ -2439,9 +2919,13 @@
 
   function collectProgramDraft() {
     return {
-      version: '8D.1',
+      version: '8D.2',
       suggestion_source: 'Rules',
       action: getControl('programAction'),
+      baseline: buildBaseline(
+        currentCanonicalContext.program,
+        currentCanonicalContext.locationsById
+      ),
       fields: {
         Program_Name: getControl('g_final_name'),
         Program_URL: getControl('g_final_url'),
