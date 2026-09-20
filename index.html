@@ -304,7 +304,8 @@
 
     .secondary-button,
     .approval-button,
-    .promote-button {
+    .promote-button,
+    .reopen-button {
       border: 1px solid #777;
       border-radius: 6px;
       padding: 9px 14px;
@@ -328,7 +329,8 @@
 
     .secondary-button:disabled,
     .approval-button:disabled,
-    .promote-button:disabled {
+    .promote-button:disabled,
+    .reopen-button:disabled {
       opacity: .45;
       cursor: default;
     }
@@ -413,7 +415,7 @@
 <div class="shell">
   <div class="header">
     <h1>Project ADry — Review & Promote</h1>
-    <p>Phase 8D.2 · Existing Provider / Program update promotion + audit</p>
+    <p>Phase 8D.2a · Controlled reopen + resilient reference handling</p>
   </div>
 
   <div id="waiting" class="waiting">
@@ -859,13 +861,14 @@
       <div class="readiness-actions">
         <button id="markReady" class="secondary-button" disabled>Mark Ready to Promote</button>
         <button id="recordApproval" class="approval-button" disabled>Record Human Approval</button>
+        <button id="reopenReview" class="reopen-button" disabled>Reopen Approved Review</button>
         <button id="promoteApproved" class="promote-button" disabled>Promote Approved Submission</button>
       </div>
 
       <div id="approvalStatus" class="approval-status"></div>
       <div id="promotionStatus" class="approval-status"></div>
       <div class="approval-note">
-        Phase 8D.2 supports approved <strong>Create + Create</strong> plus matched <strong>Update / No change</strong> Provider and Program decisions. Updates write only approved changed fields, preserve previous values in the audit log, and block if the canonical record changed after the review draft was saved. Eligibility and funding claims marked Verification required are not promoted.
+        Phase 8D.2a adds a controlled <strong>Reopen Approved Review</strong> path for corrections discovered before a successful promotion. Reopening clears the old approval/application stamps, returns the submission to In Review, and preserves failure audit-log records. Updates still write only approved changed fields and block on concurrent canonical changes.
       </div>
     </div>
 
@@ -1276,6 +1279,15 @@
     const key = normalizeKey(locationText);
     if (!key) throw new Error(label + ' is required for promotion.');
 
+    // Grist reference values may occasionally surface in a saved draft as the
+    // referenced row id rather than the display label. Treat a numeric value
+    // as a valid Location only when that exact row exists.
+    if (/^\d+$/.test(key)) {
+      const rowId = Number(key);
+      const byId = locations.find(row => Number(row.id) === rowId);
+      if (byId) return byId.id;
+    }
+
     const matches = locations.filter(row => normalizeKey(row.Municipality) === key);
     if (matches.length === 1) return matches[0].id;
     if (matches.length === 0) {
@@ -1540,11 +1552,12 @@
     const headline = document.getElementById('readinessHeadline');
     const readyButton = document.getElementById('markReady');
     const approvalButton = document.getElementById('recordApproval');
+    const reopenButton = document.getElementById('reopenReview');
     const promoteButton = document.getElementById('promoteApproved');
     const approvalStatus = document.getElementById('approvalStatus');
     const promotionStatus = document.getElementById('promotionStatus');
 
-    if (!list || !headline || !readyButton || !approvalButton || !promoteButton || !approvalStatus || !promotionStatus) return;
+    if (!list || !headline || !readyButton || !approvalButton || !reopenButton || !promoteButton || !approvalStatus || !promotionStatus) return;
 
     list.innerHTML = '';
     result.checks.forEach(check => {
@@ -1593,6 +1606,19 @@
       currentRecord &&
       (displayValue(currentRecord.Promotion_Result) === 'Success' ||
        displayValue(currentRecord.Review_Status) === 'Completed');
+
+    const promotionResult = currentRecord ? displayValue(currentRecord.Promotion_Result) : null;
+    const safeToReopen =
+      approved &&
+      isReadyStatus &&
+      !alreadySucceeded &&
+      promotionResult !== 'Partial' &&
+      (
+        updatePair ||
+        (createCreate && noExistingRefs)
+      );
+
+    reopenButton.disabled = promotionInProgress || !safeToReopen;
 
     promoteButton.disabled =
       promotionInProgress ||
@@ -1720,6 +1746,93 @@
     } catch (err) {
       console.error(err);
       setSaveStatus('Approval failed: ' + (err && err.message ? err.message : String(err)), 'error');
+    }
+  }
+
+  async function reopenApprovedReview() {
+    if (!currentRecord || !currentRecord.id || promotionInProgress) return;
+
+    const providerAction = getControl('providerAction');
+    const programAction = getControl('programAction');
+    const createCreate = providerAction === 'Create' && programAction === 'Create';
+    const updatePair =
+      ['Update', 'No change'].includes(providerAction) &&
+      ['Update', 'No change'].includes(programAction) &&
+      (providerAction === 'Update' || programAction === 'Update');
+
+    const result = displayValue(currentRecord.Promotion_Result);
+    const status = displayValue(currentRecord.Review_Status);
+
+    if (!boolValue(currentRecord.Promotion_Approved) || status !== 'Ready to Promote') {
+      setSaveStatus('Only an approved Ready to Promote review can be reopened.', 'error');
+      return;
+    }
+
+    if (result === 'Success' || status === 'Completed') {
+      setSaveStatus('A successfully completed promotion cannot be reopened from this workflow.', 'error');
+      return;
+    }
+
+    if (result === 'Partial') {
+      setSaveStatus('This submission has a partial canonical promotion. Use the recovery path instead of reopening the approved review.', 'error');
+      return;
+    }
+
+    if (createCreate && (hasValue(currentRecord.Existing_Provider) || hasValue(currentRecord.Existing_Program))) {
+      setSaveStatus('Create/Create review cannot be reopened after a canonical reference has been created. Use the partial-promotion recovery path.', 'error');
+      return;
+    }
+
+    if (!createCreate && !updatePair) {
+      setSaveStatus('This approval state is not eligible for controlled reopening.', 'error');
+      return;
+    }
+
+    const confirmed = window.confirm(
+      'Reopen this approved review for correction?\n\n' +
+      'This will clear the current approval and application stamps, return the submission to In Review, and unlock the draft. ' +
+      'Existing KB_Promotion_Log failure entries will be preserved. You must save, mark ready, and approve again after making corrections.'
+    );
+    if (!confirmed) return;
+
+    try {
+      await grist.docApi.applyUserActions([
+        ['UpdateRecord', 'Provider_Submissions', currentRecord.id, {
+          Promotion_Approved: false,
+          Approved_By: '',
+          Approved_By_Email: '',
+          Approved_On: null,
+          Applied_By: '',
+          Applied_On: null,
+          Promotion_Result: '',
+          Promotion_Error: '',
+          Review_Status: 'In Review'
+        }]
+      ]);
+
+      currentRecord.Promotion_Approved = false;
+      currentRecord.Approved_By = '';
+      currentRecord.Approved_By_Email = '';
+      currentRecord.Approved_On = null;
+      currentRecord.Applied_By = '';
+      currentRecord.Applied_On = null;
+      currentRecord.Promotion_Result = '';
+      currentRecord.Promotion_Error = '';
+      currentRecord.Review_Status = 'In Review';
+
+      put('statusBadge', 'Status: In Review');
+      setReviewLocked(false);
+      setSaveStatus(
+        'Review reopened. Correct the draft, save it, mark Ready to Promote, and record a new human approval.',
+        'success'
+      );
+      updateReadiness();
+    } catch (err) {
+      console.error('Could not reopen approved review', err);
+      setSaveStatus(
+        'Reopen failed: ' + (err && err.message ? err.message : String(err)),
+        'error'
+      );
     }
   }
 
@@ -3037,6 +3150,7 @@
   document.getElementById('saveDraft').addEventListener('click', saveDraft);
   document.getElementById('markReady').addEventListener('click', markReadyToPromote);
   document.getElementById('recordApproval').addEventListener('click', recordHumanApproval);
+  document.getElementById('reopenReview').addEventListener('click', reopenApprovedReview);
   document.getElementById('promoteApproved').addEventListener('click', promoteApprovedSubmission);
 </script>
 </body>
