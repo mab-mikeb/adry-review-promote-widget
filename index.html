@@ -181,10 +181,16 @@
       font-weight: 700;
     }
 
-    .review-table th:nth-child(1) { width: 19%; }
+    .review-table th:nth-child(1) { width: 20%; }
     .review-table th:nth-child(2) { width: 27%; }
-    .review-table th:nth-child(3) { width: 32%; }
-    .review-table th:nth-child(4) { width: 22%; }
+    .review-table th:nth-child(3) { width: 30%; }
+    .review-table th:nth-child(4) { width: 23%; }
+
+    .canonical-table th:nth-child(1) { width: 16%; }
+    .canonical-table th:nth-child(2) { width: 20%; }
+    .canonical-table th:nth-child(3) { width: 20%; }
+    .canonical-table th:nth-child(4) { width: 25%; }
+    .canonical-table th:nth-child(5) { width: 19%; }
 
     .rule-badge {
       display: inline-block;
@@ -300,10 +306,16 @@
         margin-bottom: 3px;
       }
 
-      .review-table td:nth-child(1)::before { content: "Canonical field"; }
+      .review-table td:nth-child(1)::before { content: "Claim / field"; }
       .review-table td:nth-child(2)::before { content: "Submitted"; }
-      .review-table td:nth-child(3)::before { content: "Suggested / Final"; }
-      .review-table td:nth-child(4)::before { content: "Rule"; }
+      .review-table td:nth-child(3)::before { content: "Decision / final"; }
+      .review-table td:nth-child(4)::before { content: "Reason / rule"; }
+
+      .canonical-table td:nth-child(1)::before { content: "Canonical field"; }
+      .canonical-table td:nth-child(2)::before { content: "Current KB"; }
+      .canonical-table td:nth-child(3)::before { content: "Submitted"; }
+      .canonical-table td:nth-child(4)::before { content: "Suggested / Final"; }
+      .canonical-table td:nth-child(5)::before { content: "Rule"; }
 
       .field-grid { grid-template-columns: 1fr; }
 
@@ -321,7 +333,7 @@
 <div class="shell">
   <div class="header">
     <h1>Project ADry — Review & Promote</h1>
-    <p>Phase 8C.1.1 · Editable review drafts saved to Provider_Submissions only</p>
+    <p>Phase 8C.2 · Canonical comparison + editable review drafts</p>
   </div>
 
   <div id="waiting" class="waiting">
@@ -380,10 +392,11 @@
 
         <h2 class="section-title">Provider canonical review</h2>
 
-        <table class="review-table">
+        <table class="review-table canonical-table">
           <thead>
             <tr>
               <th>Canonical field</th>
+              <th>Current KB</th>
               <th>Submitted</th>
               <th>Suggested / Final</th>
               <th>Rule</th>
@@ -392,18 +405,21 @@
           <tbody>
             <tr>
               <td>Provider_Name</td>
+              <td id="p_cur_name"></td>
               <td id="p_sub_name"></td>
               <td><input id="p_final_name" type="text"></td>
-              <td><span class="rule-badge">Auto</span><br><span class="muted">Direct mapping; reviewer may edit</span></td>
+              <td><span class="rule-badge">Auto</span><br><span class="muted">Submission if supplied; otherwise preserve current</span></td>
             </tr>
             <tr>
               <td>Website</td>
+              <td id="p_cur_website"></td>
               <td id="p_sub_website"></td>
               <td><input id="p_final_website" type="text"></td>
-              <td><span class="rule-badge">Auto</span><br><span class="muted">Direct mapping; reviewer may edit</span></td>
+              <td><span class="rule-badge">Auto</span><br><span class="muted">Submission if supplied; otherwise preserve current</span></td>
             </tr>
             <tr>
               <td>Organization_Type</td>
+              <td id="p_cur_orgtype"></td>
               <td id="p_sub_orgtype"></td>
               <td>
                 <select id="p_final_orgtype">
@@ -418,16 +434,18 @@
                   <option>Other</option>
                 </select>
               </td>
-              <td><span class="rule-badge">Review</span><br><span class="muted">Do not infer</span></td>
+              <td><span class="rule-badge">Review</span><br><span class="muted">Preserve current unless reviewer changes it</span></td>
             </tr>
             <tr>
               <td>Primary_Municipality</td>
+              <td id="p_cur_municipality"></td>
               <td id="p_sub_municipality"></td>
               <td><input id="p_final_municipality" type="text" placeholder="Reviewer input required"></td>
-              <td><span class="rule-badge">Review</span><br><span class="muted">Do not auto-map program location</span></td>
+              <td><span class="rule-badge">Review</span><br><span class="muted">Do not auto-map program location to Provider</span></td>
             </tr>
             <tr>
               <td>Information_Source</td>
+              <td id="p_cur_source"></td>
               <td id="p_sub_source"></td>
               <td>
                 <select id="p_final_source">
@@ -439,10 +457,11 @@
                   <option>Other</option>
                 </select>
               </td>
-              <td><span class="rule-badge">Auto</span><br><span class="muted">Submission provenance</span></td>
+              <td><span class="rule-badge">Auto</span><br><span class="muted">New: Provider submitted. Existing: preserve current by default</span></td>
             </tr>
             <tr>
               <td>Confidence_Status</td>
+              <td id="p_cur_confidence"></td>
               <td id="p_sub_confidence"></td>
               <td>
                 <select id="p_final_confidence">
@@ -455,10 +474,11 @@
                   <option>Superseded</option>
                 </select>
               </td>
-              <td><span class="rule-badge">Auto</span><br><span class="muted">Provider supplied, not verified</span></td>
+              <td><span class="rule-badge">Safe default</span><br><span class="muted">Never downgrade an existing confidence level automatically</span></td>
             </tr>
             <tr>
               <td>Provider_Participation_Level</td>
+              <td id="p_cur_participation"></td>
               <td id="p_sub_participation"></td>
               <td>
                 <select id="p_final_participation">
@@ -468,13 +488,14 @@
                   <option>Other</option>
                 </select>
               </td>
-              <td><span class="rule-badge">Auto</span><br><span class="muted">Default community listing</span></td>
+              <td><span class="rule-badge">Safe default</span><br><span class="muted">New: Community listing. Existing: preserve current</span></td>
             </tr>
             <tr>
               <td>Primary_Email</td>
+              <td id="p_cur_email"></td>
               <td id="p_sub_email"></td>
               <td><input id="p_final_email" type="email" placeholder="Optional provider email"></td>
-              <td><span class="rule-badge">Review</span><br><span class="muted">Do not auto-map Contact_Email</span></td>
+              <td><span class="rule-badge">Review</span><br><span class="muted">Contact_Email is context only; preserve existing Primary_Email</span></td>
             </tr>
           </tbody>
         </table>
@@ -502,10 +523,11 @@
 
         <h2 class="section-title">Program canonical review</h2>
 
-        <table class="review-table">
+        <table class="review-table canonical-table">
           <thead>
             <tr>
               <th>Canonical field</th>
+              <th>Current KB</th>
               <th>Submitted</th>
               <th>Suggested / Final</th>
               <th>Rule</th>
@@ -514,24 +536,28 @@
           <tbody>
             <tr>
               <td>Program_Name</td>
+              <td id="g_cur_name"></td>
               <td id="g_sub_name"></td>
               <td><input id="g_final_name" type="text"></td>
-              <td><span class="rule-badge">Auto</span><br><span class="muted">Direct mapping; reviewer may edit</span></td>
+              <td><span class="rule-badge">Auto</span><br><span class="muted">Submission if supplied; otherwise preserve current</span></td>
             </tr>
             <tr>
               <td>Program_URL</td>
+              <td id="g_cur_url"></td>
               <td id="g_sub_url"></td>
               <td><input id="g_final_url" type="text"></td>
-              <td><span class="rule-badge">Auto</span><br><span class="muted">Direct mapping; reviewer may edit</span></td>
+              <td><span class="rule-badge">Auto</span><br><span class="muted">Submission if supplied; otherwise preserve current</span></td>
             </tr>
             <tr>
               <td>Program_Summary</td>
+              <td id="g_cur_summary"></td>
               <td id="g_sub_summary"></td>
               <td><textarea id="g_final_summary"></textarea></td>
-              <td><span class="rule-badge">Auto</span><br><span class="muted">Description → Summary</span></td>
+              <td><span class="rule-badge">Auto</span><br><span class="muted">Description → Summary when submitted</span></td>
             </tr>
             <tr>
               <td>Delivery_Mode</td>
+              <td id="g_cur_delivery"></td>
               <td id="g_sub_delivery"></td>
               <td>
                 <select id="g_final_delivery">
@@ -541,28 +567,32 @@
                   <option>Hybrid</option>
                 </select>
               </td>
-              <td><span class="rule-badge">Auto</span><br><span class="muted">Direct mapping</span></td>
+              <td><span class="rule-badge">Auto</span><br><span class="muted">Submission if supplied; otherwise preserve current</span></td>
             </tr>
             <tr>
               <td>Days_Offered</td>
+              <td id="g_cur_days"></td>
               <td id="g_sub_days"></td>
               <td><input id="g_final_days" type="text"></td>
-              <td><span class="rule-badge">Auto</span><br><span class="muted">Draft stores reviewer-normalized text</span></td>
+              <td><span class="rule-badge">Review</span><br><span class="muted">Reviewer-normalized Choice List draft</span></td>
             </tr>
             <tr>
               <td>Time_of_Day</td>
+              <td id="g_cur_time"></td>
               <td id="g_sub_time"></td>
               <td><input id="g_final_time" type="text"></td>
-              <td><span class="rule-badge">Auto</span><br><span class="muted">Draft stores reviewer-normalized text</span></td>
+              <td><span class="rule-badge">Review</span><br><span class="muted">Reviewer-normalized Choice List draft</span></td>
             </tr>
             <tr>
               <td>Cost_Notes</td>
+              <td id="g_cur_costnotes"></td>
               <td id="g_sub_costnotes"></td>
               <td><textarea id="g_final_costnotes"></textarea></td>
-              <td><span class="rule-badge">Auto</span><br><span class="muted">Cost information → Cost notes</span></td>
+              <td><span class="rule-badge">Auto</span><br><span class="muted">Cost information → Cost notes when submitted</span></td>
             </tr>
             <tr>
               <td>Information_Source</td>
+              <td id="g_cur_source"></td>
               <td id="g_sub_source"></td>
               <td>
                 <select id="g_final_source">
@@ -574,10 +604,11 @@
                   <option>Other</option>
                 </select>
               </td>
-              <td><span class="rule-badge">Auto</span><br><span class="muted">Submission provenance</span></td>
+              <td><span class="rule-badge">Safe default</span><br><span class="muted">New: Provider submitted. Existing: preserve current</span></td>
             </tr>
             <tr>
               <td>Confidence_Status</td>
+              <td id="g_cur_confidence"></td>
               <td id="g_sub_confidence"></td>
               <td>
                 <select id="g_final_confidence">
@@ -590,10 +621,11 @@
                   <option>Superseded</option>
                 </select>
               </td>
-              <td><span class="rule-badge">Auto</span><br><span class="muted">Provider supplied, not verified</span></td>
+              <td><span class="rule-badge">Safe default</span><br><span class="muted">Never downgrade an existing confidence level automatically</span></td>
             </tr>
             <tr>
               <td>Program_Category</td>
+              <td id="g_cur_category"></td>
               <td id="g_sub_category"></td>
               <td>
                 <select id="g_final_category">
@@ -607,10 +639,11 @@
                   <option>Other</option>
                 </select>
               </td>
-              <td><span class="rule-badge">Review</span><br><span class="muted">Classification</span></td>
+              <td><span class="rule-badge">Review</span><br><span class="muted">Preserve current unless reviewer changes it</span></td>
             </tr>
             <tr>
               <td>Age_Band</td>
+              <td id="g_cur_age"></td>
               <td id="g_sub_age"></td>
               <td>
                 <div id="g_final_age" class="choice-list" role="group" aria-label="Age Band">
@@ -623,16 +656,18 @@
                   <label><input type="checkbox" value="Other/Unclear">Other/Unclear</label>
                 </div>
               </td>
-              <td><span class="rule-badge">Rule + Review</span><br><span class="muted">Choice List. Numeric ranges are pre-mapped; reviewer may adjust.</span></td>
+              <td><span class="rule-badge">Rule + Review</span><br><span class="muted">Submitted numeric range proposes bands; reviewer may adjust</span></td>
             </tr>
             <tr>
               <td>Primary_Municipality</td>
+              <td id="g_cur_municipality"></td>
               <td id="g_sub_municipality"></td>
               <td><input id="g_final_municipality" type="text"></td>
-              <td><span class="rule-badge">Review</span><br><span class="muted">Location reference resolution comes later</span></td>
+              <td><span class="rule-badge">Review</span><br><span class="muted">Resolve final text to Locations reference at promotion</span></td>
             </tr>
             <tr>
               <td>Cost_Basis</td>
+              <td id="g_cur_costbasis"></td>
               <td id="g_sub_costbasis"></td>
               <td>
                 <select id="g_final_costbasis">
@@ -650,7 +685,7 @@
                   <option>Other</option>
                 </select>
               </td>
-              <td><span class="rule-badge">Review</span><br><span class="muted">Do not infer billing model</span></td>
+              <td><span class="rule-badge">Review</span><br><span class="muted">Preserve current unless reviewer changes it</span></td>
             </tr>
           </tbody>
         </table>
@@ -870,6 +905,73 @@
       .map(band => band.name);
   }
 
+  function tableToRows(columnFormat) {
+    if (!columnFormat || !Array.isArray(columnFormat.id)) return [];
+
+    return columnFormat.id.map((rowId, index) => {
+      const row = { id: rowId };
+      Object.keys(columnFormat).forEach(columnId => {
+        row[columnId] = columnFormat[columnId][index];
+      });
+      return row;
+    });
+  }
+
+  function refRowId(value) {
+    if (typeof value === 'number') return value || null;
+
+    if (Array.isArray(value) && value[0] === 'R') {
+      return Number(value[2]) || null;
+    }
+
+    return null;
+  }
+
+  function hasOwn(obj, key) {
+    return Object.prototype.hasOwnProperty.call(obj || {}, key);
+  }
+
+  function draftOr(fields, key, fallback) {
+    return hasOwn(fields, key) ? fields[key] : fallback;
+  }
+
+  function submittedOrCurrent(submittedValue, currentValue) {
+    return hasValue(submittedValue) ? displayValue(submittedValue) : (displayValue(currentValue) || '');
+  }
+
+  function locationLabel(value, locationsById) {
+    const rowId = refRowId(value);
+    if (!rowId) return displayValue(value) || '';
+
+    const location = locationsById.get(rowId);
+    return location ? (displayValue(location.Municipality) || String(rowId)) : String(rowId);
+  }
+
+  async function fetchCanonicalContext(record) {
+    const [submissionsData, providersData, programsData, locationsData] = await Promise.all([
+      grist.docApi.fetchTable('Provider_Submissions'),
+      grist.docApi.fetchTable('Providers'),
+      grist.docApi.fetchTable('Programs'),
+      grist.docApi.fetchTable('Locations')
+    ]);
+
+    const submissions = tableToRows(submissionsData);
+    const providers = tableToRows(providersData);
+    const programs = tableToRows(programsData);
+    const locations = tableToRows(locationsData);
+    const locationsById = new Map(locations.map(row => [row.id, row]));
+
+    const rawSubmission = submissions.find(row => row.id === record.id) || null;
+    const providerId = rawSubmission ? refRowId(rawSubmission.Existing_Provider) : null;
+    const programId = rawSubmission ? refRowId(rawSubmission.Existing_Program) : null;
+
+    return {
+      provider: providerId ? (providers.find(row => row.id === providerId) || null) : null,
+      program: programId ? (programs.find(row => row.id === programId) || null) : null,
+      locationsById
+    };
+  }
+
   function parseDraft(value) {
     const raw = displayValue(value);
     if (!raw) return null;
@@ -898,7 +1000,7 @@
     return hasValue(existingReference) ? '' : 'Create';
   }
 
-  function render(record) {
+  async function render(record) {
     currentRecord = record || null;
 
     if (!record) {
@@ -917,6 +1019,17 @@
     const providerFields = providerDraft.fields || {};
     const programFields = programDraft.fields || {};
     const claims = programDraft.claims || {};
+
+    let canonical = { provider: null, program: null, locationsById: new Map() };
+    try {
+      canonical = await fetchCanonicalContext(record);
+    } catch (err) {
+      console.error('Canonical comparison load failed', err);
+      setSaveStatus('Canonical comparison could not be loaded. Draft editing still works.', 'error');
+    }
+
+    const currentProvider = canonical.provider;
+    const currentProgram = canonical.program;
 
     put('submissionBadge', 'Submission: ' + (displayValue(record.Submission_ID) || 'Unknown'));
     put('statusBadge', 'Status: ' + (displayValue(record.Review_Status) || 'Not set'));
@@ -943,35 +1056,106 @@
 
     document.getElementById('providerMatchNotice').textContent =
       hasValue(record.Existing_Provider)
-        ? 'An existing Provider is matched. Select the intended action and edit the draft values as needed. Canonical comparison is not yet enabled.'
+        ? 'An existing Provider is matched. Current KB values are shown beside the submission so the reviewer can focus on differences.'
         : 'No existing Provider is matched. The default action is CREATE; reviewer approval will still be required before canonical promotion.';
 
     document.getElementById('programMatchNotice').textContent =
       hasValue(record.Existing_Program)
-        ? 'An existing Program is matched. Select the intended action and edit the draft values as needed. Canonical comparison is not yet enabled.'
+        ? 'An existing Program is matched. Current KB values are shown beside the submission so the reviewer can focus on differences.'
         : 'No existing Program is matched. The default action is CREATE; reviewer approval will still be required before canonical promotion.';
+
+    put('p_cur_name', currentProvider && currentProvider.Provider_Name, 'No canonical record');
+    put('p_cur_website', currentProvider && currentProvider.Website, 'No canonical record');
+    put('p_cur_orgtype', currentProvider && currentProvider.Organization_Type, 'No canonical record');
+    put(
+      'p_cur_municipality',
+      currentProvider ? locationLabel(currentProvider.Primary_Municipality, canonical.locationsById) : null,
+      'No canonical record'
+    );
+    put('p_cur_source', currentProvider && currentProvider.Information_Source, 'No canonical record');
+    put('p_cur_confidence', currentProvider && currentProvider.Confidence_Status, 'No canonical record');
+    put('p_cur_participation', currentProvider && currentProvider.Provider_Participation_Level, 'No canonical record');
+    put('p_cur_email', currentProvider && currentProvider.Primary_Email, 'No canonical record');
 
     put('p_sub_name', record.Provider_Name);
     put('p_sub_website', record.Website);
     put('p_sub_orgtype', null, 'Not collected in submission');
-    put('p_sub_municipality', record.Municipality, 'No program municipality supplied');
+    put('p_sub_municipality', record.Municipality, 'Program municipality only');
     put('p_sub_source', null, 'Derived from submission');
     put('p_sub_confidence', null, 'Derived from submission');
     put('p_sub_participation', null, 'No participation level supplied');
     put('p_sub_email', record.Contact_Email);
 
-    setControl('p_final_name', providerFields.Provider_Name ?? record.Provider_Name ?? '');
-    setControl('p_final_website', providerFields.Website ?? record.Website ?? '');
-    setControl('p_final_orgtype', providerFields.Organization_Type ?? '');
-    setControl('p_final_municipality', providerFields.Primary_Municipality ?? '');
-    setControl('p_final_source', providerFields.Information_Source ?? 'Provider submitted');
-    setControl('p_final_confidence', providerFields.Confidence_Status ?? 'Provider supplied');
-    setControl('p_final_participation', providerFields.Provider_Participation_Level ?? 'Community listing');
-    setControl('p_final_email', providerFields.Primary_Email ?? '');
+    setControl(
+      'p_final_name',
+      draftOr(providerFields, 'Provider_Name', submittedOrCurrent(record.Provider_Name, currentProvider && currentProvider.Provider_Name))
+    );
+    setControl(
+      'p_final_website',
+      draftOr(providerFields, 'Website', submittedOrCurrent(record.Website, currentProvider && currentProvider.Website))
+    );
+    setControl(
+      'p_final_orgtype',
+      draftOr(providerFields, 'Organization_Type', displayValue(currentProvider && currentProvider.Organization_Type) || '')
+    );
+    setControl(
+      'p_final_municipality',
+      draftOr(
+        providerFields,
+        'Primary_Municipality',
+        currentProvider ? locationLabel(currentProvider.Primary_Municipality, canonical.locationsById) : ''
+      )
+    );
+    setControl(
+      'p_final_source',
+      draftOr(
+        providerFields,
+        'Information_Source',
+        displayValue(currentProvider && currentProvider.Information_Source) || 'Provider submitted'
+      )
+    );
+    setControl(
+      'p_final_confidence',
+      draftOr(
+        providerFields,
+        'Confidence_Status',
+        displayValue(currentProvider && currentProvider.Confidence_Status) || 'Provider supplied'
+      )
+    );
+    setControl(
+      'p_final_participation',
+      draftOr(
+        providerFields,
+        'Provider_Participation_Level',
+        displayValue(currentProvider && currentProvider.Provider_Participation_Level) || 'Community listing'
+      )
+    );
+    setControl(
+      'p_final_email',
+      draftOr(providerFields, 'Primary_Email', displayValue(currentProvider && currentProvider.Primary_Email) || '')
+    );
 
     put('Contact_Name', record.Contact_Name);
     put('Contact_Role', record.Contact_Role);
     put('Existing_Provider', record.Existing_Provider);
+
+    put('g_cur_name', currentProgram && currentProgram.Program_Name, 'No canonical record');
+    put('g_cur_url', currentProgram && currentProgram.Program_URL, 'No canonical record');
+    put('g_cur_summary', currentProgram && currentProgram.Program_Summary, 'No canonical record');
+    put('g_cur_delivery', currentProgram && currentProgram.Delivery_Mode, 'No canonical record');
+    put('g_cur_days', currentProgram && currentProgram.Days_Offered, 'No canonical record');
+    put('g_cur_time', currentProgram && currentProgram.Time_of_Day, 'No canonical record');
+    put('g_cur_costnotes', currentProgram && currentProgram.Cost_Notes, 'No canonical record');
+    put('g_cur_source', currentProgram && currentProgram.Information_Source, 'No canonical record');
+    put('g_cur_confidence', currentProgram && currentProgram.Confidence_Status, 'No canonical record');
+    put('g_cur_category', currentProgram && currentProgram.Program_Category, 'No canonical record');
+    put('g_cur_age', currentProgram && currentProgram.Age_Band, 'No canonical record');
+    put(
+      'g_cur_municipality',
+      currentProgram ? locationLabel(currentProgram.Primary_Municipality, canonical.locationsById) : null,
+      'No canonical record'
+    );
+    put('g_cur_costbasis', currentProgram && currentProgram.Cost_Basis, 'No canonical record');
 
     put('g_sub_name', record.Program_Name);
     put('g_sub_url', record.Program_URL);
@@ -987,24 +1171,78 @@
     put('g_sub_municipality', record.Municipality);
     put('g_sub_costbasis', record.Cost_Information);
 
-    setControl('g_final_name', programFields.Program_Name ?? record.Program_Name ?? '');
-    setControl('g_final_url', programFields.Program_URL ?? record.Program_URL ?? '');
-    setControl('g_final_summary', programFields.Program_Summary ?? record.Program_Description ?? '');
-    setControl('g_final_delivery', programFields.Delivery_Mode ?? record.Delivery_Mode ?? '');
-    setControl('g_final_days', programFields.Days_Offered ?? displayValue(record.Days_Offered) ?? '');
-    setControl('g_final_time', programFields.Time_of_Day ?? displayValue(record.Time_of_Day) ?? '');
-    setControl('g_final_costnotes', programFields.Cost_Notes ?? record.Cost_Information ?? '');
-    setControl('g_final_source', programFields.Information_Source ?? 'Provider submitted');
-    setControl('g_final_confidence', programFields.Confidence_Status ?? 'Provider supplied');
-    setControl('g_final_category', programFields.Program_Category ?? '');
+    setControl(
+      'g_final_name',
+      draftOr(programFields, 'Program_Name', submittedOrCurrent(record.Program_Name, currentProgram && currentProgram.Program_Name))
+    );
+    setControl(
+      'g_final_url',
+      draftOr(programFields, 'Program_URL', submittedOrCurrent(record.Program_URL, currentProgram && currentProgram.Program_URL))
+    );
+    setControl(
+      'g_final_summary',
+      draftOr(programFields, 'Program_Summary', submittedOrCurrent(record.Program_Description, currentProgram && currentProgram.Program_Summary))
+    );
+    setControl(
+      'g_final_delivery',
+      draftOr(programFields, 'Delivery_Mode', submittedOrCurrent(record.Delivery_Mode, currentProgram && currentProgram.Delivery_Mode))
+    );
+    setControl(
+      'g_final_days',
+      draftOr(programFields, 'Days_Offered', submittedOrCurrent(record.Days_Offered, currentProgram && currentProgram.Days_Offered))
+    );
+    setControl(
+      'g_final_time',
+      draftOr(programFields, 'Time_of_Day', submittedOrCurrent(record.Time_of_Day, currentProgram && currentProgram.Time_of_Day))
+    );
+    setControl(
+      'g_final_costnotes',
+      draftOr(programFields, 'Cost_Notes', submittedOrCurrent(record.Cost_Information, currentProgram && currentProgram.Cost_Notes))
+    );
+    setControl(
+      'g_final_source',
+      draftOr(
+        programFields,
+        'Information_Source',
+        displayValue(currentProgram && currentProgram.Information_Source) || 'Provider submitted'
+      )
+    );
+    setControl(
+      'g_final_confidence',
+      draftOr(
+        programFields,
+        'Confidence_Status',
+        displayValue(currentProgram && currentProgram.Confidence_Status) || 'Provider supplied'
+      )
+    );
+    setControl(
+      'g_final_category',
+      draftOr(programFields, 'Program_Category', displayValue(currentProgram && currentProgram.Program_Category) || '')
+    );
+
+    const defaultAgeBands = hasValue(record.Age_Range)
+      ? suggestAgeBands(record.Age_Range)
+      : normalizeChoiceListValue(currentProgram && currentProgram.Age_Band);
+
     setChoiceList(
       'g_final_age',
-      programFields.Age_Band !== undefined
-        ? programFields.Age_Band
-        : suggestAgeBands(record.Age_Range)
+      hasOwn(programFields, 'Age_Band') ? programFields.Age_Band : defaultAgeBands
     );
-    setControl('g_final_municipality', programFields.Primary_Municipality ?? record.Municipality ?? '');
-    setControl('g_final_costbasis', programFields.Cost_Basis ?? '');
+
+    setControl(
+      'g_final_municipality',
+      draftOr(
+        programFields,
+        'Primary_Municipality',
+        hasValue(record.Municipality)
+          ? displayValue(record.Municipality)
+          : (currentProgram ? locationLabel(currentProgram.Primary_Municipality, canonical.locationsById) : '')
+      )
+    );
+    setControl(
+      'g_final_costbasis',
+      draftOr(programFields, 'Cost_Basis', displayValue(currentProgram && currentProgram.Cost_Basis) || '')
+    );
 
     put('Service_Area', record.Service_Area);
     put('Existing_Program', record.Existing_Program);
@@ -1043,7 +1281,7 @@
 
   function collectProviderDraft() {
     return {
-      version: '8C.1.1',
+      version: '8C.2',
       suggestion_source: 'Rules',
       action: getControl('providerAction'),
       fields: {
@@ -1061,7 +1299,7 @@
 
   function collectProgramDraft() {
     return {
-      version: '8C.1.1',
+      version: '8C.2',
       suggestion_source: 'Rules',
       action: getControl('programAction'),
       fields: {
@@ -1146,7 +1384,10 @@
   }
 
   grist.onRecord(function(record) {
-    render(record);
+    render(record).catch(err => {
+      console.error(err);
+      setSaveStatus('Widget render failed: ' + (err && err.message ? err.message : String(err)), 'error');
+    });
   });
 
   document.querySelectorAll('.tab').forEach(button => {
