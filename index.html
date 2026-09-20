@@ -331,7 +331,8 @@
     .secondary-button,
     .approval-button,
     .promote-button,
-    .reopen-button {
+    .reopen-button,
+    .disposition-button {
       border: 1px solid #777;
       border-radius: 6px;
       padding: 9px 14px;
@@ -356,7 +357,8 @@
     .secondary-button:disabled,
     .approval-button:disabled,
     .promote-button:disabled,
-    .reopen-button:disabled {
+    .reopen-button:disabled,
+    .disposition-button:disabled {
       opacity: .45;
       cursor: default;
     }
@@ -446,7 +448,7 @@
 <div class="shell">
   <div class="header">
     <h1>Project ADry — Review & Promote</h1>
-    <p>Phase 8D.2e · Provider municipality text normalization fix</p>
+    <p>Phase 8D.3 · No-change, reject, and verification dispositions</p>
   </div>
 
   <div id="waiting" class="waiting">
@@ -893,13 +895,14 @@
         <button id="markReady" class="secondary-button" disabled>Mark Ready to Promote</button>
         <button id="recordApproval" class="approval-button" disabled>Record Human Approval</button>
         <button id="reopenReview" class="reopen-button" disabled>Reopen Approved Review</button>
+        <button id="finalizeDisposition" class="disposition-button" disabled>Finalize Review Disposition</button>
         <button id="promoteApproved" class="promote-button" disabled>Promote Approved Submission</button>
       </div>
 
       <div id="approvalStatus" class="approval-status"></div>
       <div id="promotionStatus" class="approval-status"></div>
       <div class="approval-note">
-        Phase 8D.2e aligns the widget with the current DEV schema: <strong>Providers.Primary_Municipality</strong> is stored as municipality text, while Program municipality handling remains reference-aware. Numeric legacy values such as <strong>2</strong> are normalized back to the matching municipality label before Provider writes.
+        Phase 8D.3 adds explicit non-promotion dispositions. <strong>No change + No change</strong> can be completed without canonical writes, <strong>Reject</strong> finalizes the submission without canonical writes, and any entity-level <strong>Verification required</strong> routes the submission to Verification Required. These dispositions do not create KB_Promotion_Log rows because no canonical mutation occurs.
       </div>
     </div>
 
@@ -1710,6 +1713,22 @@
     if (saveButton) saveButton.disabled = locked;
   }
 
+  function getEntityDisposition() {
+    const providerAction = getControl('providerAction');
+    const programAction = getControl('programAction');
+
+    if (providerAction === 'Verification required' || programAction === 'Verification required') {
+      return 'verification';
+    }
+    if (providerAction === 'Reject' || programAction === 'Reject') {
+      return 'reject';
+    }
+    if (providerAction === 'No change' && programAction === 'No change') {
+      return 'nochange';
+    }
+    return null;
+  }
+
   function updateReadiness() {
     const result = validateReadiness();
     lastReadiness = result;
@@ -1719,11 +1738,12 @@
     const readyButton = document.getElementById('markReady');
     const approvalButton = document.getElementById('recordApproval');
     const reopenButton = document.getElementById('reopenReview');
+    const dispositionButton = document.getElementById('finalizeDisposition');
     const promoteButton = document.getElementById('promoteApproved');
     const approvalStatus = document.getElementById('approvalStatus');
     const promotionStatus = document.getElementById('promotionStatus');
 
-    if (!list || !headline || !readyButton || !approvalButton || !reopenButton || !promoteButton || !approvalStatus || !promotionStatus) return;
+    if (!list || !headline || !readyButton || !approvalButton || !reopenButton || !dispositionButton || !promoteButton || !approvalStatus || !promotionStatus) return;
 
     list.innerHTML = '';
     result.checks.forEach(check => {
@@ -1738,8 +1758,20 @@
     const approved = currentRecord && boolValue(currentRecord.Promotion_Approved);
     const status = currentRecord ? displayValue(currentRecord.Review_Status) : null;
     const isReadyStatus = status === 'Ready to Promote';
+    const disposition = getEntityDisposition();
+    const draftsSaved =
+      currentRecord &&
+      !!parseDraft(currentRecord.Provider_Review_Draft) &&
+      !!parseDraft(currentRecord.Program_Review_Draft) &&
+      !isDirty;
 
-    if (approved) {
+    if (disposition === 'verification' && !approved && status !== 'Completed') {
+      headline.textContent = 'Review can be routed to Verification Required.';
+    } else if (disposition === 'reject' && !approved && status !== 'Completed') {
+      headline.textContent = 'Review can be finalized as rejected.';
+    } else if (disposition === 'nochange' && !approved && status !== 'Completed') {
+      headline.textContent = 'No canonical changes are required.';
+    } else if (approved) {
       headline.textContent = 'Human approval recorded.';
     } else if (result.ready && isReadyStatus) {
       headline.textContent = 'Ready for human approval.';
@@ -1749,8 +1781,33 @@
       headline.textContent = 'Resolve the blocking items before promotion.';
     }
 
-    readyButton.disabled = approved || !result.ready || isReadyStatus;
-    approvalButton.disabled = approved || !result.ready || !isReadyStatus || isDirty;
+    readyButton.disabled = !!disposition || approved || !result.ready || isReadyStatus;
+    approvalButton.disabled = !!disposition || approved || !result.ready || !isReadyStatus || isDirty;
+
+    if (disposition === 'verification') {
+      dispositionButton.textContent = 'Send to Verification';
+    } else if (disposition === 'reject') {
+      dispositionButton.textContent = 'Finalize Rejection';
+    } else if (disposition === 'nochange') {
+      dispositionButton.textContent = 'Complete No-Change Review';
+    } else {
+      dispositionButton.textContent = 'Finalize Review Disposition';
+    }
+
+    const providerMatchedForDisposition = currentRecord && hasValue(currentRecord.Existing_Provider);
+    const programMatchedForDisposition = currentRecord && hasValue(currentRecord.Existing_Program);
+    const noChangeSafe =
+      disposition !== 'nochange' ||
+      (providerMatchedForDisposition && programMatchedForDisposition);
+
+    dispositionButton.disabled =
+      promotionInProgress ||
+      approved ||
+      !disposition ||
+      !draftsSaved ||
+      !noChangeSafe ||
+      status === 'Completed' ||
+      (disposition === 'verification' && status === 'Verification Required');
 
     const providerAction = getControl('providerAction');
     const programAction = getControl('programAction');
@@ -1788,6 +1845,7 @@
 
     promoteButton.disabled =
       promotionInProgress ||
+      !!disposition ||
       !approved ||
       !result.ready ||
       !isReadyStatus ||
@@ -1801,6 +1859,12 @@
 
     if (promotionInProgress) {
       promotionStatus.textContent = 'Promotion is running. Do not close or refresh the widget.';
+    } else if (disposition === 'verification') {
+      promotionStatus.textContent = 'Entity-level verification is required. No canonical records will be changed; finalize this review to route it to Verification Required.';
+    } else if (disposition === 'reject') {
+      promotionStatus.textContent = 'Rejected entity decisions are not promoted. Finalizing will complete the review without canonical changes.';
+    } else if (disposition === 'nochange') {
+      promotionStatus.textContent = 'Both matched entities are No change. Finalizing will complete the review without canonical changes or promotion-log rows.';
     } else if (persisted && displayValue(currentRecord.Promotion_Result) !== 'Success') {
       promotionStatus.textContent = persisted.text;
     } else if (alreadySucceeded) {
@@ -1835,12 +1899,122 @@
         (when ? ' on ' + when : '') +
         '. The review is locked.';
       setReviewLocked(true);
+    } else if (status === 'Completed') {
+      approvalStatus.textContent = 'Review is completed. No further edits are allowed in this workflow.';
+      setReviewLocked(true);
     } else {
       approvalStatus.textContent =
         isReadyStatus
           ? 'Status is Ready to Promote. Record Human Approval only after reviewing the final saved draft.'
-          : 'Approval is not yet recorded.';
+          : (status === 'Verification Required'
+              ? 'Status is Verification Required. Resolve verification in the deep-review workflow, then save a revised decision here.'
+              : 'Approval is not yet recorded.');
       setReviewLocked(false);
+    }
+  }
+
+  async function finalizeReviewDisposition() {
+    if (!currentRecord || !currentRecord.id || promotionInProgress) return;
+
+    const disposition = getEntityDisposition();
+    const providerAction = getControl('providerAction');
+    const programAction = getControl('programAction');
+
+    if (!disposition) {
+      setSaveStatus('No non-promotion disposition is selected.', 'error');
+      return;
+    }
+
+    if (isDirty ||
+        !parseDraft(currentRecord.Provider_Review_Draft) ||
+        !parseDraft(currentRecord.Program_Review_Draft)) {
+      setSaveStatus('Save the review draft before finalizing the disposition.', 'error');
+      return;
+    }
+
+    if (boolValue(currentRecord.Promotion_Approved)) {
+      setSaveStatus('This review is already approved for promotion. Reopen it before changing to a non-promotion disposition.', 'error');
+      return;
+    }
+
+    if (
+      disposition === 'nochange' &&
+      (!hasValue(currentRecord.Existing_Provider) || !hasValue(currentRecord.Existing_Program))
+    ) {
+      setSaveStatus('No change requires both an existing Provider and existing Program match.', 'error');
+      return;
+    }
+
+    let targetStatus = 'Completed';
+    let actionLabel = 'complete this review with no canonical changes';
+
+    if (disposition === 'verification') {
+      targetStatus = 'Verification Required';
+      actionLabel = 'route this review to Verification Required with no canonical changes';
+    } else if (disposition === 'reject') {
+      actionLabel = 'finalize this review as rejected with no canonical changes';
+    }
+
+    const confirmed = window.confirm(
+      'Confirm review disposition?\n\n' +
+      'Provider: ' + providerAction + '\n' +
+      'Program: ' + programAction + '\n\n' +
+      'This will ' + actionLabel + '.'
+    );
+    if (!confirmed) return;
+
+    const existingNotes = displayValue(currentRecord.Review_Notes) || '';
+    const dispositionNote =
+      '[8D.3] Provider=' + providerAction +
+      '; Program=' + programAction +
+      '; Result=' + targetStatus +
+      '; No canonical Provider/Program records were written.';
+    const reviewNotes = existingNotes
+      ? existingNotes + '\n' + dispositionNote
+      : dispositionNote;
+
+    try {
+      const updates = {
+        Review_Status: targetStatus,
+        Review_Notes: reviewNotes,
+        Promotion_Approved: false,
+        Promotion_Result: '',
+        Promotion_Error: '',
+        Applied_By: '',
+        Applied_On: null
+      };
+
+      await grist.docApi.applyUserActions([
+        ['UpdateRecord', 'Provider_Submissions', currentRecord.id, updates]
+      ]);
+
+      Object.assign(currentRecord, updates);
+      put('statusBadge', 'Status: ' + targetStatus);
+
+      if (disposition === 'verification') {
+        setSaveStatus(
+          'Review routed to Verification Required. No canonical records or promotion-log rows were created.',
+          'success'
+        );
+      } else if (disposition === 'reject') {
+        setSaveStatus(
+          'Rejection finalized. Review completed with no canonical changes.',
+          'success'
+        );
+      } else {
+        setSaveStatus(
+          'No-change review completed. No canonical records or promotion-log rows were created.',
+          'success'
+        );
+      }
+
+      updateReadiness();
+    } catch (err) {
+      console.error('Could not finalize review disposition', err);
+      setSaveStatus(
+        'Disposition finalization failed: ' + (err && err.message ? err.message : String(err)),
+        'error'
+      );
     }
   }
 
@@ -3195,7 +3369,7 @@
     }
 
     return {
-      version: '8D.2e',
+      version: '8D.3',
       suggestion_source: 'Rules',
       action: getControl('providerAction'),
       baseline: buildBaseline(
@@ -3221,7 +3395,7 @@
     }
 
     return {
-      version: '8D.2e',
+      version: '8D.3',
       suggestion_source: 'Rules',
       action: getControl('programAction'),
       baseline: buildBaseline(
@@ -3285,7 +3459,7 @@
       Program_Review_Draft: JSON.stringify(programDraft)
     };
 
-    if (['New', 'Ready to Promote'].includes(displayValue(currentRecord.Review_Status))) {
+    if (['New', 'Ready to Promote', 'Verification Required'].includes(displayValue(currentRecord.Review_Status))) {
       updates.Review_Status = 'In Review';
     }
 
@@ -3348,6 +3522,7 @@
   document.getElementById('markReady').addEventListener('click', markReadyToPromote);
   document.getElementById('recordApproval').addEventListener('click', recordHumanApproval);
   document.getElementById('reopenReview').addEventListener('click', reopenApprovedReview);
+  document.getElementById('finalizeDisposition').addEventListener('click', finalizeReviewDisposition);
   document.getElementById('promoteApproved').addEventListener('click', promoteApprovedSubmission);
 </script>
 </body>
