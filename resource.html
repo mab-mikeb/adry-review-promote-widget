@@ -164,7 +164,8 @@
     }
     .secondary-button,
     .approval-button,
-    .reopen-button {
+    .reopen-button,
+    .promote-button {
       border: 1px solid #777;
       border-radius: 6px;
       padding: 9px 14px;
@@ -178,9 +179,15 @@
       color: #fff;
       border-color: #222;
     }
+    .promote-button {
+      background: #1f5f2c;
+      color: #fff;
+      border-color: #1f5f2c;
+    }
     .secondary-button:disabled,
     .approval-button:disabled,
-    .reopen-button:disabled {
+    .reopen-button:disabled,
+    .promote-button:disabled {
       opacity: .45;
       cursor: default;
     }
@@ -227,7 +234,7 @@
 <div class="shell">
   <div class="header">
     <h1>Project ADry — Resource Review & Promote</h1>
-    <p>Phase 9A.2 · Resource readiness + human approval gate</p>
+    <p>Phase 9A.3 · Existing Resource update promotion + audit</p>
   </div>
 
   <div id="waiting" class="waiting">Select a resource submission in Grist.</div>
@@ -254,8 +261,8 @@
     <div id="reviewContent" class="content">
       <div id="matchNotice" class="notice"></div>
       <div class="notice">
-        <strong>Phase 9A.2:</strong> review and edit Suggested / Final values, save the draft, then pass readiness and record human approval.
-        Approval is an authorization gate only. This phase still does <strong>not</strong> create or update canonical Resources.
+        <strong>Phase 9A.3:</strong> approved matched Resource updates can now be promoted to the canonical Resources table.
+        Only approved changed fields are written, with before/after values recorded in KB_Promotion_Log. Create and non-promotion dispositions remain disabled until later phases.
       </div>
 
       <table class="review-table">
@@ -280,11 +287,12 @@
         <button id="markReady" class="secondary-button" disabled>Mark Ready to Promote</button>
         <button id="recordApproval" class="approval-button" disabled>Record Human Approval</button>
         <button id="reopenReview" class="reopen-button" disabled>Reopen Approved Review</button>
+        <button id="promoteApproved" class="promote-button" disabled>Promote Approved Resource</button>
       </div>
       <div id="approvalStatus" class="approval-status"></div>
       <div class="approval-note">
-        Human approval does not write to the canonical Resources table in Phase 9A.2.
-        Canonical promotion will be added in the next phase.
+        Human approval remains a separate authorization gate. Canonical writes occur only when
+        <strong>Promote Approved Resource</strong> is explicitly confirmed.
       </div>
     </div>
 
@@ -302,6 +310,7 @@
   let currentResource = null;
   let isRendering = false;
   let isDirty = false;
+  let promotionInProgress = false;
 
   const FIELD_DEFS = [
     { key: 'Resource_Name', aliases: ['Resource_Name'], type: 'text', rule: 'Submission if supplied; otherwise preserve current.' },
@@ -461,6 +470,91 @@
 
   function normalizeReviewValue(field, value) {
     return field === 'Last_Checked' ? formatDateValue(value) : displayValue(value);
+  }
+
+  function parseChoiceListText(value) {
+    const text = displayValue(value).trim();
+    if (!text) return [];
+    return text.split(',').map(v => v.trim()).filter(Boolean);
+  }
+
+  function choiceListCell(value) {
+    const values = Array.isArray(value) ? value : parseChoiceListText(value);
+    return ['L', ...values];
+  }
+
+  function dateCell(value) {
+    const text = formatDateValue(value);
+    if (!text) return null;
+    const ms = Date.parse(text + 'T00:00:00Z');
+    if (Number.isNaN(ms)) throw new Error('Last_Checked must be a valid date.');
+    return ms / 1000;
+  }
+
+  function buildResourceBaseline(resource, providersById) {
+    if (!resource) return null;
+    const baseline = { __row_id: resource.id };
+    FIELD_DEFS.forEach(def => {
+      baseline[def.key] = normalizeCanonicalValue(def.key, resource[def.key], providersById);
+    });
+    return baseline;
+  }
+
+  function baselineMatchesLive(baseline, liveResource, fields, providersById) {
+    if (!baseline || !liveResource) return false;
+    if (Number(baseline.__row_id) !== Number(liveResource.id)) return false;
+    return fields.every(field => {
+      const live = normalizeCanonicalValue(field, liveResource[field], providersById);
+      return displayValue(live).trim() === displayValue(baseline[field]).trim();
+    });
+  }
+
+  function resolveProviderRowId(providerValue, providersById) {
+    const text = displayValue(providerValue).trim();
+    if (!text) return null;
+
+    const numeric = refRowId(providerValue);
+    if (numeric && providersById.has(numeric)) return numeric;
+
+    const matches = [...providersById.values()].filter(
+      row => displayValue(row.Provider_Name).trim().toLowerCase() === text.toLowerCase()
+    );
+    if (matches.length === 1) return matches[0].id;
+    if (matches.length === 0) throw new Error('Provider "' + text + '" does not exactly match a Providers row.');
+    throw new Error('Provider "' + text + '" matches more than one Providers row.');
+  }
+
+  function canonicalWriteValue(field, value, providersById) {
+    if (field === 'Provider') {
+      return resolveProviderRowId(value, providersById);
+    }
+    if (field === 'Last_Checked') {
+      return dateCell(value);
+    }
+    if (['Intended_User', 'Support_Need', 'Purchase_Model'].includes(field)) {
+      return choiceListCell(value);
+    }
+    return displayValue(value);
+  }
+
+  function friendlyAppliedValue(field, value, providersById) {
+    if (field === 'Provider') {
+      const rowId = typeof value === 'number' ? value : refRowId(value);
+      const provider = providersById.get(rowId);
+      return provider ? displayValue(provider.Provider_Name) : displayValue(value);
+    }
+    if (field === 'Last_Checked') return formatDateValue(value);
+    if (['Intended_User', 'Support_Need', 'Purchase_Model'].includes(field)) {
+      return displayValue(value);
+    }
+    return displayValue(value);
+  }
+
+  function dateTimeSeconds(value) {
+    if (value === null || value === undefined || value === '') return null;
+    if (typeof value === 'number') return value;
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : parsed.getTime() / 1000;
   }
 
   function buildRows(record, resource, providersById, draftFields) {
@@ -726,9 +820,13 @@
       fields[def.key] = getControl('r_final_' + def.key);
     });
     return {
-      version: '9A.2',
+      version: '9A.3',
       suggestion_source: 'Rules',
       action: getControl('resourceAction'),
+      baseline: buildResourceBaseline(
+        currentResource,
+        window.__resourceProvidersById || new Map()
+      ),
       fields
     };
   }
@@ -740,9 +838,10 @@
     const readyButton = document.getElementById('markReady');
     const approvalButton = document.getElementById('recordApproval');
     const reopenButton = document.getElementById('reopenReview');
+    const promoteButton = document.getElementById('promoteApproved');
     const approvalStatus = document.getElementById('approvalStatus');
 
-    if (!list || !headline || !readyButton || !approvalButton || !reopenButton || !approvalStatus) return;
+    if (!list || !headline || !readyButton || !approvalButton || !reopenButton || !promoteButton || !approvalStatus) return;
 
     list.innerHTML = '';
     result.checks.forEach(check => {
@@ -759,6 +858,7 @@
       readyButton.disabled = true;
       approvalButton.disabled = true;
       reopenButton.disabled = true;
+      promoteButton.disabled = true;
       return;
     }
 
@@ -781,7 +881,21 @@
 
     readyButton.disabled = completed || approved || !result.ready || isReadyStatus || isDirty;
     approvalButton.disabled = completed || approved || !result.ready || !isReadyStatus || isDirty;
-    reopenButton.disabled = completed || !approved || status !== 'Ready to Promote';
+    reopenButton.disabled = promotionInProgress || completed || !approved || status !== 'Ready to Promote';
+
+    const action = getControl('resourceAction');
+    const draft = parseDraft(currentRecord.Resource_Review_Draft);
+    const hasBaseline = !!(draft && draft.baseline);
+    promoteButton.disabled =
+      promotionInProgress ||
+      completed ||
+      !approved ||
+      status !== 'Ready to Promote' ||
+      isDirty ||
+      action !== 'Update' ||
+      !currentResource ||
+      !hasBaseline ||
+      !result.ready;
 
     if (approved) {
       const who = displayValue(currentRecord.Approved_By) || 'Recorded approver';
@@ -918,6 +1032,208 @@
     }
   }
 
+  async function promoteApprovedResource() {
+    if (!currentRecord || !currentRecord.id || promotionInProgress) return;
+
+    promotionInProgress = true;
+    updateReadiness();
+    setSaveStatus('Rechecking approval and canonical Resource before update...');
+
+    let rawSubmission = null;
+
+    try {
+      const ctx = await fetchContext(currentRecord);
+      rawSubmission = ctx.raw;
+      const liveResource = ctx.resource;
+      const providersById = ctx.providersById;
+
+      if (!liveResource) throw new Error('No existing Resource is matched.');
+      if (displayValue(rawSubmission.Resource_Action) !== 'Update') {
+        throw new Error('Phase 9A.3 only promotes Resource Action = Update.');
+      }
+      if (!boolValue(rawSubmission.Promotion_Approved)) {
+        throw new Error('Promotion_Approved is not true on the source submission.');
+      }
+      if (displayValue(rawSubmission.Review_Status) !== 'Ready to Promote') {
+        throw new Error('Review_Status must be Ready to Promote.');
+      }
+      if (displayValue(rawSubmission.Promotion_Result) === 'Success') {
+        throw new Error('This Resource submission has already been promoted.');
+      }
+      if (!hasValue(rawSubmission.Approved_By) ||
+          !hasValue(rawSubmission.Approved_By_Email) ||
+          !hasValue(rawSubmission.Approved_On)) {
+        throw new Error('Approval stamps are incomplete.');
+      }
+
+      const draft = parseDraft(rawSubmission.Resource_Review_Draft);
+      if (!draft || !draft.fields) throw new Error('Saved Resource review draft is required.');
+      if (!draft.baseline) {
+        throw new Error('This approved draft predates Phase 9A.3 baseline protection. Reopen, save the draft again, and re-approve before promotion.');
+      }
+      if (draft.action !== 'Update') {
+        throw new Error('Saved draft action no longer matches Resource Action = Update.');
+      }
+
+      const desiredFriendly = {};
+      FIELD_DEFS.forEach(def => {
+        desiredFriendly[def.key] = normalizeReviewValue(def.key, draft.fields[def.key]);
+      });
+
+      const changedFields = FIELD_DEFS
+        .filter(def => {
+          const current = normalizeCanonicalValue(def.key, liveResource[def.key], providersById);
+          return displayValue(current).trim() !== displayValue(desiredFriendly[def.key]).trim();
+        })
+        .map(def => def.key);
+
+      if (!changedFields.length) {
+        throw new Error('Resource Action is Update, but the approved values are identical to the current canonical Resource.');
+      }
+
+      if (!baselineMatchesLive(draft.baseline, liveResource, changedFields, providersById)) {
+        throw new Error('The canonical Resource changed after this review draft was saved. Reopen and re-review the current KB values before promoting.');
+      }
+
+      const changed = {};
+      const previous = {};
+      const applied = {};
+
+      changedFields.forEach(field => {
+        const writeValue = canonicalWriteValue(field, desiredFriendly[field], providersById);
+        changed[field] = writeValue;
+        previous[field] = normalizeCanonicalValue(field, liveResource[field], providersById);
+        applied[field] = friendlyAppliedValue(field, writeValue, providersById);
+      });
+
+      const confirmed = window.confirm(
+        'Promote this approved Resource update now?\n\n' +
+        'Changed fields: ' + changedFields.join(', ') +
+        '\n\nOnly these approved fields will be written.'
+      );
+      if (!confirmed) {
+        setSaveStatus('Resource promotion cancelled. No canonical record was changed.');
+        return;
+      }
+
+      setSaveStatus('Applying approved Resource update...');
+      await grist.docApi.applyUserActions([
+        ['UpdateRecord', 'Resources', liveResource.id, changed]
+      ]);
+
+      const resourceData = await grist.docApi.fetchTable('Resources');
+      const verified = tableToRows(resourceData).find(row => row.id === liveResource.id);
+      if (!verified) throw new Error('Updated Resource could not be reloaded for verification.');
+
+      const failedFields = changedFields.filter(field => {
+        const actual = normalizeCanonicalValue(field, verified[field], providersById);
+        return displayValue(actual).trim() !== displayValue(applied[field]).trim();
+      });
+      if (failedFields.length) {
+        throw new Error('Resource update was sent but one or more approved values did not persist: ' + failedFields.join(', '));
+      }
+
+      const now = Date.now() / 1000;
+      const appliedBy =
+        displayValue(rawSubmission.Approved_By) ||
+        displayValue(rawSubmission.Approved_By_Email) ||
+        'Approved reviewer';
+
+      await grist.docApi.applyUserActions([
+        ['AddRecord', 'KB_Promotion_Log', null, {
+          Submission_Type: 'Resource Submission',
+          Source_Submission_ID: displayValue(rawSubmission.Submission_ID) || '',
+          Entity_Type: 'Resource',
+          Action: 'Update',
+          Canonical_ID: displayValue(verified.Resource_ID) || '',
+          Canonical_Row_ID: verified.id,
+          Approved_By: displayValue(rawSubmission.Approved_By) || '',
+          Approved_By_Email: displayValue(rawSubmission.Approved_By_Email) || '',
+          Approved_On: dateTimeSeconds(rawSubmission.Approved_On),
+          Applied_By: appliedBy,
+          Applied_On: now,
+          Result: 'Success',
+          Changed_Fields: changedFields.join('\n'),
+          Previous_Values: JSON.stringify(previous),
+          Applied_Values: JSON.stringify(applied),
+          Suggestion_Source: displayValue(draft.suggestion_source) || 'Rules',
+          Human_Decision: 'Approved',
+          Override_Reason: '',
+          Implementation_Version: '9A.3',
+          Error_Detail: ''
+        }],
+        ['UpdateRecord', 'Resource_Submissions', rawSubmission.id, {
+          Applied_By: appliedBy,
+          Applied_On: now,
+          Promotion_Result: 'Success',
+          Promotion_Error: '',
+          Review_Status: 'Completed'
+        }]
+      ]);
+
+      const refreshed = await fetchContext(rawSubmission);
+      currentRecord = refreshed.raw;
+      currentResource = refreshed.resource;
+      window.__resourceProvidersById = refreshed.providersById;
+      put('statusBadge', 'Status: Completed');
+      setSaveStatus(
+        'Resource promotion complete. Updated fields: ' + changedFields.join(', ') + '. Audit log written.',
+        'success'
+      );
+    } catch (err) {
+      console.error('Phase 9A.3 Resource promotion failed', err);
+      const message = err && err.message ? err.message : String(err);
+
+      if (rawSubmission) {
+        const now = Date.now() / 1000;
+        const appliedBy =
+          displayValue(rawSubmission.Approved_By) ||
+          displayValue(rawSubmission.Approved_By_Email) ||
+          'Approved reviewer';
+        try {
+          await grist.docApi.applyUserActions([
+            ['UpdateRecord', 'Resource_Submissions', rawSubmission.id, {
+              Applied_By: appliedBy,
+              Applied_On: now,
+              Promotion_Result: 'Failed',
+              Promotion_Error: message
+            }],
+            ['AddRecord', 'KB_Promotion_Log', null, {
+              Submission_Type: 'Resource Submission',
+              Source_Submission_ID: displayValue(rawSubmission.Submission_ID) || '',
+              Entity_Type: 'Resource',
+              Action: 'Update',
+              Canonical_ID: currentResource ? (displayValue(currentResource.Resource_ID) || '') : '',
+              Canonical_Row_ID: currentResource ? currentResource.id : null,
+              Approved_By: displayValue(rawSubmission.Approved_By) || '',
+              Approved_By_Email: displayValue(rawSubmission.Approved_By_Email) || '',
+              Approved_On: dateTimeSeconds(rawSubmission.Approved_On),
+              Applied_By: appliedBy,
+              Applied_On: now,
+              Result: 'Failed',
+              Changed_Fields: '',
+              Previous_Values: '{}',
+              Applied_Values: '{}',
+              Suggestion_Source: 'Rules',
+              Human_Decision: 'Approved',
+              Override_Reason: '',
+              Implementation_Version: '9A.3',
+              Error_Detail: message
+            }]
+          ]);
+        } catch (auditErr) {
+          console.error('Could not write Resource promotion failure audit', auditErr);
+        }
+      }
+
+      setSaveStatus('RESOURCE PROMOTION FAILED — ' + message, 'error');
+      window.alert('Resource promotion stopped: ' + message);
+    } finally {
+      promotionInProgress = false;
+      updateReadiness();
+    }
+  }
+
   async function saveDraft() {
     if (!currentRecord || !currentRecord.id) {
       setSaveStatus('Cannot save: no selected Resource_Submissions row.', 'error');
@@ -1012,6 +1328,7 @@
   document.getElementById('markReady').addEventListener('click', markReadyToPromote);
   document.getElementById('recordApproval').addEventListener('click', recordHumanApproval);
   document.getElementById('reopenReview').addEventListener('click', reopenApprovedReview);
+  document.getElementById('promoteApproved').addEventListener('click', promoteApprovedResource);
 </script>
 </body>
 </html>
