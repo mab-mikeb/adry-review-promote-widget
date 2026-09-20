@@ -137,6 +137,65 @@
     .save-status { font-size: 13px; color: #666; }
     .save-status.error { color: #9b1c1c; }
     .save-status.success { color: #246b2d; }
+
+    .readiness-panel {
+      margin: 0 22px 18px;
+      padding: 16px;
+      border: 1px solid #ccc;
+      border-radius: 7px;
+      background: #fafafa;
+    }
+    .readiness-panel h2 { margin: 0 0 8px; font-size: 16px; }
+    .readiness-headline { margin-bottom: 10px; font-weight: 700; }
+    .readiness-list {
+      margin: 0 0 12px;
+      padding-left: 20px;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    .readiness-list li.ok { color: #246b2d; }
+    .readiness-list li.warn { color: #7a5b00; }
+    .readiness-list li.block { color: #9b1c1c; }
+    .readiness-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+    }
+    .secondary-button,
+    .approval-button,
+    .reopen-button {
+      border: 1px solid #777;
+      border-radius: 6px;
+      padding: 9px 14px;
+      font-weight: 700;
+      cursor: pointer;
+      background: #fff;
+      color: #222;
+    }
+    .approval-button {
+      background: #222;
+      color: #fff;
+      border-color: #222;
+    }
+    .secondary-button:disabled,
+    .approval-button:disabled,
+    .reopen-button:disabled {
+      opacity: .45;
+      cursor: default;
+    }
+    .approval-status {
+      margin-top: 10px;
+      font-size: 13px;
+      color: #555;
+    }
+    .approval-note {
+      margin-top: 8px;
+      font-size: 12px;
+      color: #666;
+      line-height: 1.4;
+    }
+
     .waiting {
       padding: 50px 20px;
       text-align: center;
@@ -168,7 +227,7 @@
 <div class="shell">
   <div class="header">
     <h1>Project ADry — Resource Review & Promote</h1>
-    <p>Phase 9A.1b · Canonical comparison + readable date handling</p>
+    <p>Phase 9A.2 · Resource readiness + human approval gate</p>
   </div>
 
   <div id="waiting" class="waiting">Select a resource submission in Grist.</div>
@@ -195,9 +254,8 @@
     <div id="reviewContent" class="content">
       <div id="matchNotice" class="notice"></div>
       <div class="notice">
-        <strong>Phase 9A.1:</strong> review and edit Suggested / Final values, then save the draft.
-        This phase writes only to <strong>Resource_Submissions.Resource_Review_Draft</strong> and
-        <strong>Resource_Action</strong>. It does not create or update canonical Resources.
+        <strong>Phase 9A.2:</strong> review and edit Suggested / Final values, save the draft, then pass readiness and record human approval.
+        Approval is an authorization gate only. This phase still does <strong>not</strong> create or update canonical Resources.
       </div>
 
       <table class="review-table">
@@ -212,6 +270,22 @@
         </thead>
         <tbody id="resourceRows"></tbody>
       </table>
+    </div>
+
+    <div class="readiness-panel">
+      <h2>Promotion readiness</h2>
+      <div id="readinessHeadline" class="readiness-headline"></div>
+      <ul id="readinessList" class="readiness-list"></ul>
+      <div class="readiness-actions">
+        <button id="markReady" class="secondary-button" disabled>Mark Ready to Promote</button>
+        <button id="recordApproval" class="approval-button" disabled>Record Human Approval</button>
+        <button id="reopenReview" class="reopen-button" disabled>Reopen Approved Review</button>
+      </div>
+      <div id="approvalStatus" class="approval-status"></div>
+      <div class="approval-note">
+        Human approval does not write to the canonical Resources table in Phase 9A.2.
+        Canonical promotion will be added in the next phase.
+      </div>
     </div>
 
     <div class="save-bar">
@@ -267,6 +341,10 @@
 
   function hasValue(value) {
     return displayValue(value).trim().length > 0;
+  }
+
+  function boolValue(value) {
+    return value === true || value === 1 || value === '1' || value === 'true';
   }
 
   function refRowId(value) {
@@ -458,6 +536,90 @@
     });
   }
 
+  function changedResourceFields() {
+    if (!currentResource) return [];
+
+    return FIELD_DEFS
+      .filter(def => {
+        const current = normalizeCanonicalValue(def.key, currentResource[def.key], window.__resourceProvidersById || new Map());
+        const finalValue = normalizeReviewValue(def.key, getControl('r_final_' + def.key));
+        return displayValue(current).trim() !== displayValue(finalValue).trim();
+      })
+      .map(def => def.key);
+  }
+
+  function validateReadiness() {
+    const checks = [];
+    const add = (level, message) => checks.push({ level, message });
+
+    if (!currentRecord) {
+      add('block', 'No Resource submission is selected.');
+      return { ready: false, checks };
+    }
+
+    const action = getControl('resourceAction');
+    const matched = !!currentResource;
+    const draft = parseDraft(currentRecord.Resource_Review_Draft);
+    const draftSaved = !!draft && !isDirty;
+
+    add(
+      draftSaved ? 'ok' : 'block',
+      draftSaved
+        ? 'Resource review draft is saved.'
+        : (isDirty ? 'Resource review has unsaved changes.' : 'Resource review draft has not been saved yet.')
+    );
+
+    add(
+      action ? 'ok' : 'block',
+      action ? 'Resource decision: ' + action + '.' : 'Resource action is not selected.'
+    );
+
+    if (action === 'Create' && matched) {
+      add('block', 'Resource is already matched; CREATE would risk a duplicate. Choose Update, No change, Verification required, or Reject.');
+    }
+
+    if (action === 'Update' && !matched) {
+      add('block', 'Resource action is UPDATE but no existing Resource is matched.');
+    }
+
+    if (action === 'No change' && !matched) {
+      add('block', 'Resource action is NO CHANGE but no existing Resource is matched.');
+    }
+
+    if (action === 'Verification required') {
+      add('block', 'Resource-level verification is unresolved. Verification disposition handling will be added after the promotion path is proven.');
+    }
+
+    if (action === 'Reject') {
+      add('block', 'Resource action is REJECT. Rejected resources are not approved for promotion.');
+    }
+
+    if (action === 'No change') {
+      add('block', 'No change does not require promotion approval. Disposition finalization will be added after the promotion path is proven.');
+    }
+
+    if (action === 'Create') {
+      add(hasValue(getControl('r_final_Resource_Name')) ? 'ok' : 'block', 'New Resource has a Resource Name.');
+      add(hasValue(getControl('r_final_Resource_Type')) ? 'ok' : 'block', 'New Resource has a Resource Type.');
+      add(hasValue(getControl('r_final_Resource_Summary')) ? 'ok' : 'block', 'New Resource has a Resource Summary.');
+      add(hasValue(getControl('r_final_Website')) ? 'ok' : 'block', 'New Resource has a Website.');
+    }
+
+    if (action === 'Update') {
+      add(hasValue(getControl('r_final_Resource_Name')) ? 'ok' : 'block', 'Updated Resource retains a Resource Name.');
+      const changed = changedResourceFields();
+      add(
+        changed.length ? 'ok' : 'block',
+        changed.length
+          ? 'Approved update contains canonical changes: ' + changed.join(', ') + '.'
+          : 'Resource Action is Update, but Suggested / Final values are identical to the current canonical Resource.'
+      );
+    }
+
+    const ready = !checks.some(check => check.level === 'block');
+    return { ready, checks };
+  }
+
   function setReviewLocked(locked, noChange) {
     document.getElementById('resourceAction').disabled = locked;
     document.querySelectorAll('#resourceRows input, #resourceRows textarea').forEach(el => {
@@ -471,6 +633,7 @@
     if (isRendering) return;
     isDirty = true;
     setSaveStatus('Unsaved changes. Save before selecting another submission.');
+    updateReadiness();
   }
 
   async function fetchContext(record) {
@@ -509,6 +672,7 @@
     const ctx = await fetchContext(record);
     currentRecord = ctx.raw;
     currentResource = ctx.resource;
+    window.__resourceProvidersById = ctx.providersById;
 
     const draft = parseDraft(currentRecord.Resource_Review_Draft) || {};
     const draftFields = draft.fields || {};
@@ -532,7 +696,7 @@
       syncNoChangeToCanonical(ctx.providersById);
     }
 
-    const approved = currentRecord.Promotion_Approved === true || currentRecord.Promotion_Approved === 1;
+    const approved = boolValue(currentRecord.Promotion_Approved);
     const completed = displayValue(currentRecord.Review_Status) === 'Completed';
     setReviewLocked(approved || completed, action === 'No change');
 
@@ -553,6 +717,7 @@
       );
     }
     isRendering = false;
+    updateReadiness();
   }
 
   function collectDraft() {
@@ -561,11 +726,196 @@
       fields[def.key] = getControl('r_final_' + def.key);
     });
     return {
-      version: '9A.1',
+      version: '9A.2',
       suggestion_source: 'Rules',
       action: getControl('resourceAction'),
       fields
     };
+  }
+
+  function updateReadiness() {
+    const result = validateReadiness();
+    const list = document.getElementById('readinessList');
+    const headline = document.getElementById('readinessHeadline');
+    const readyButton = document.getElementById('markReady');
+    const approvalButton = document.getElementById('recordApproval');
+    const reopenButton = document.getElementById('reopenReview');
+    const approvalStatus = document.getElementById('approvalStatus');
+
+    if (!list || !headline || !readyButton || !approvalButton || !reopenButton || !approvalStatus) return;
+
+    list.innerHTML = '';
+    result.checks.forEach(check => {
+      const item = document.createElement('li');
+      item.className = check.level;
+      item.textContent =
+        (check.level === 'ok' ? '✓ ' : check.level === 'warn' ? '⚠ ' : '✕ ') +
+        check.message;
+      list.appendChild(item);
+    });
+
+    if (!currentRecord) {
+      headline.textContent = 'Select a Resource submission.';
+      readyButton.disabled = true;
+      approvalButton.disabled = true;
+      reopenButton.disabled = true;
+      return;
+    }
+
+    const approved = boolValue(currentRecord.Promotion_Approved);
+    const status = displayValue(currentRecord.Review_Status);
+    const isReadyStatus = status === 'Ready to Promote';
+    const completed = status === 'Completed';
+
+    if (completed) {
+      headline.textContent = 'Resource review is completed.';
+    } else if (approved) {
+      headline.textContent = 'Human approval recorded.';
+    } else if (result.ready && isReadyStatus) {
+      headline.textContent = 'Ready for human approval.';
+    } else if (result.ready) {
+      headline.textContent = 'Review passes validation and can be marked Ready to Promote.';
+    } else {
+      headline.textContent = 'Resolve the blocking items before approval.';
+    }
+
+    readyButton.disabled = completed || approved || !result.ready || isReadyStatus || isDirty;
+    approvalButton.disabled = completed || approved || !result.ready || !isReadyStatus || isDirty;
+    reopenButton.disabled = completed || !approved || status !== 'Ready to Promote';
+
+    if (approved) {
+      const who = displayValue(currentRecord.Approved_By) || 'Recorded approver';
+      const email = displayValue(currentRecord.Approved_By_Email);
+      const when = displayValue(currentRecord.Approved_On);
+      approvalStatus.textContent =
+        'Approved by ' + who +
+        (email ? ' (' + email + ')' : '') +
+        (when ? ' on ' + when : '') +
+        '. The review is locked.';
+      setReviewLocked(true, false);
+    } else if (completed) {
+      approvalStatus.textContent = 'Completed Resource submission is locked as historical workflow evidence.';
+      setReviewLocked(true, false);
+    } else {
+      approvalStatus.textContent =
+        isReadyStatus
+          ? 'Status is Ready to Promote. Record Human Approval only after reviewing the final saved draft.'
+          : 'Approval is not yet recorded.';
+      setReviewLocked(false, getControl('resourceAction') === 'No change');
+    }
+  }
+
+  async function markReadyToPromote() {
+    if (!currentRecord || !currentRecord.id) return;
+
+    const result = validateReadiness();
+    if (!result.ready || isDirty) {
+      setSaveStatus('Cannot mark ready: save the draft and resolve all blocking readiness items.', 'error');
+      updateReadiness();
+      return;
+    }
+
+    try {
+      await grist.docApi.applyUserActions([
+        ['UpdateRecord', 'Resource_Submissions', currentRecord.id, {
+          Review_Status: 'Ready to Promote'
+        }]
+      ]);
+
+      currentRecord.Review_Status = 'Ready to Promote';
+      put('statusBadge', 'Status: Ready to Promote');
+      setSaveStatus('Resource submission marked Ready to Promote.', 'success');
+      updateReadiness();
+    } catch (err) {
+      console.error(err);
+      setSaveStatus('Could not mark Ready to Promote: ' + (err && err.message ? err.message : String(err)), 'error');
+    }
+  }
+
+  async function recordHumanApproval() {
+    if (!currentRecord || !currentRecord.id) return;
+
+    const result = validateReadiness();
+    if (!result.ready ||
+        displayValue(currentRecord.Review_Status) !== 'Ready to Promote' ||
+        isDirty) {
+      setSaveStatus('Approval blocked: the review must be saved, pass readiness validation, and be Ready to Promote.', 'error');
+      updateReadiness();
+      return;
+    }
+
+    if (boolValue(currentRecord.Promotion_Approved)) {
+      setSaveStatus('Human approval is already recorded.', 'error');
+      return;
+    }
+
+    const confirmed = window.confirm(
+      'Record human approval for this saved Resource review draft? Approval alone does not create or update canonical Resources.'
+    );
+    if (!confirmed) return;
+
+    try {
+      await grist.docApi.applyUserActions([
+        ['UpdateRecord', 'Resource_Submissions', currentRecord.id, {
+          Promotion_Approved: true
+        }]
+      ]);
+
+      const refreshed = await fetchContext(currentRecord);
+      currentRecord = refreshed.raw;
+      currentResource = refreshed.resource;
+      window.__resourceProvidersById = refreshed.providersById;
+
+      setSaveStatus('Human approval recorded. Canonical Resource promotion is not enabled yet.', 'success');
+      updateReadiness();
+    } catch (err) {
+      console.error(err);
+      setSaveStatus('Approval failed: ' + (err && err.message ? err.message : String(err)), 'error');
+    }
+  }
+
+  async function reopenApprovedReview() {
+    if (!currentRecord || !currentRecord.id) return;
+
+    if (!boolValue(currentRecord.Promotion_Approved) ||
+        displayValue(currentRecord.Review_Status) !== 'Ready to Promote') {
+      setSaveStatus('Only an approved Ready to Promote Resource review can be reopened.', 'error');
+      return;
+    }
+
+    const confirmed = window.confirm(
+      'Reopen this approved Resource review for correction?\n\n' +
+      'This clears the approval and returns the Resource submission to In Review. A new approval will be required.'
+    );
+    if (!confirmed) return;
+
+    try {
+      await grist.docApi.applyUserActions([
+        ['UpdateRecord', 'Resource_Submissions', currentRecord.id, {
+          Promotion_Approved: false,
+          Approved_By: '',
+          Approved_By_Email: '',
+          Approved_On: null,
+          Applied_By: '',
+          Applied_On: null,
+          Promotion_Result: '',
+          Promotion_Error: '',
+          Review_Status: 'In Review'
+        }]
+      ]);
+
+      const refreshed = await fetchContext(currentRecord);
+      currentRecord = refreshed.raw;
+      currentResource = refreshed.resource;
+      window.__resourceProvidersById = refreshed.providersById;
+      put('statusBadge', 'Status: In Review');
+
+      setSaveStatus('Resource review reopened. Correct and save the draft, then record a new approval.', 'success');
+      updateReadiness();
+    } catch (err) {
+      console.error(err);
+      setSaveStatus('Reopen failed: ' + (err && err.message ? err.message : String(err)), 'error');
+    }
   }
 
   async function saveDraft() {
@@ -574,7 +924,7 @@
       return;
     }
 
-    if (currentRecord.Promotion_Approved === true || currentRecord.Promotion_Approved === 1) {
+    if (boolValue(currentRecord.Promotion_Approved)) {
       setSaveStatus('This Resource review is already approved and locked.', 'error');
       return;
     }
@@ -625,6 +975,7 @@
       isDirty = false;
       if (updates.Review_Status) put('statusBadge', 'Status: ' + updates.Review_Status);
       setSaveStatus('Resource review draft saved to Resource_Submissions.', 'success');
+      updateReadiness();
     } catch (err) {
       console.error(err);
       setSaveStatus('Save failed: ' + (err && err.message ? err.message : String(err)), 'error');
@@ -658,6 +1009,9 @@
   });
 
   document.getElementById('saveDraft').addEventListener('click', saveDraft);
+  document.getElementById('markReady').addEventListener('click', markReadyToPromote);
+  document.getElementById('recordApproval').addEventListener('click', recordHumanApproval);
+  document.getElementById('reopenReview').addEventListener('click', reopenApprovedReview);
 </script>
 </body>
 </html>
