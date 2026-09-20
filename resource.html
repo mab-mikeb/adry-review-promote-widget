@@ -168,7 +168,7 @@
 <div class="shell">
   <div class="header">
     <h1>Project ADry — Resource Review & Promote</h1>
-    <p>Phase 9A.1a · Canonical comparison + completed-record protection</p>
+    <p>Phase 9A.1b · Canonical comparison + readable date handling</p>
   </div>
 
   <div id="waiting" class="waiting">Select a resource submission in Grist.</div>
@@ -251,7 +251,7 @@
     { key: 'Resource_Status', aliases: ['Resource_Status'], type: 'text', rule: 'Preserve current for matched resource unless reviewer changes it.' },
     { key: 'Information_Source', aliases: ['Information_Source'], type: 'text', rule: 'Existing: preserve current by default. New: Provider submitted unless changed.' },
     { key: 'Confidence_Status', aliases: ['Confidence_Status'], type: 'text', rule: 'Never downgrade an existing confidence level automatically.' },
-    { key: 'Last_Checked', aliases: ['Last_Checked'], type: 'text', rule: 'Preserve current unless reviewer deliberately changes it.' },
+    { key: 'Last_Checked', aliases: ['Last_Checked'], type: 'date', rule: 'Shown as YYYY-MM-DD; preserve current unless reviewer deliberately changes it.' },
     { key: 'Notes', aliases: ['Notes', 'Additional_Information'], type: 'textarea', rule: 'Additional context; reviewer decides whether it belongs in canonical notes.' }
   ];
 
@@ -345,6 +345,29 @@
     return provider ? displayValue(provider.Provider_Name) : String(providerId);
   }
 
+  function formatDateValue(value) {
+    const raw = displayValue(value).trim();
+    if (!raw) return '';
+
+    if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+
+    const numeric = Number(raw);
+    if (Number.isFinite(numeric) && numeric > 0) {
+      const ms = numeric < 100000000000 ? numeric * 1000 : numeric;
+      const date = new Date(ms);
+      if (!Number.isNaN(date.getTime())) {
+        return date.toISOString().slice(0, 10);
+      }
+    }
+
+    const parsed = new Date(raw);
+    if (!Number.isNaN(parsed.getTime())) {
+      return parsed.toISOString().slice(0, 10);
+    }
+
+    return raw;
+  }
+
   function normalizeCanonicalValue(field, value, providersById) {
     if (field === 'Provider') {
       const id = refRowId(value);
@@ -352,7 +375,14 @@
       const provider = providersById.get(id);
       return provider ? displayValue(provider.Provider_Name) : String(id);
     }
+    if (field === 'Last_Checked') {
+      return formatDateValue(value);
+    }
     return displayValue(value);
+  }
+
+  function normalizeReviewValue(field, value) {
+    return field === 'Last_Checked' ? formatDateValue(value) : displayValue(value);
   }
 
   function buildRows(record, resource, providersById, draftFields) {
@@ -364,12 +394,13 @@
       const current = resource
         ? normalizeCanonicalValue(def.key, resource[def.key], providersById)
         : '';
-      const submitted = def.key === 'Provider'
+      const submittedRaw = def.key === 'Provider'
         ? (firstField(record, ['Provider_Name']) || firstField(record, ['Provider', 'Existing_Provider']))
         : firstField(record, def.aliases);
+      const submitted = normalizeReviewValue(def.key, submittedRaw);
       const hasDraft = draftFields && Object.prototype.hasOwnProperty.call(draftFields, def.key);
       const suggested = hasDraft
-        ? draftFields[def.key]
+        ? normalizeReviewValue(def.key, draftFields[def.key])
         : (hasValue(submitted) ? submitted : current);
 
       const fieldCell = document.createElement('td');
@@ -391,7 +422,8 @@
 
       const finalCell = document.createElement('td');
       const control = document.createElement(def.type === 'textarea' ? 'textarea' : 'input');
-      if (def.type !== 'textarea') control.type = 'text';
+      if (def.type === 'date') control.type = 'date';
+      else if (def.type !== 'textarea') control.type = 'text';
       control.id = 'r_final_' + def.key;
       control.value = displayValue(suggested);
       control.addEventListener('input', markDirty);
