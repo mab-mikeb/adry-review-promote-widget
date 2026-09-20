@@ -446,7 +446,7 @@
 <div class="shell">
   <div class="header">
     <h1>Project ADry — Review & Promote</h1>
-    <p>Phase 8D.2c · Review-table label layout polish</p>
+    <p>Phase 8D.2d · Grist reference normalization fix</p>
   </div>
 
   <div id="waiting" class="waiting">
@@ -899,7 +899,7 @@
       <div id="approvalStatus" class="approval-status"></div>
       <div id="promotionStatus" class="approval-status"></div>
       <div class="approval-note">
-        Phase 8D.2b makes entity decisions explicit in the review UI. When Provider or Program is set to <strong>No change</strong>, that entity's Suggested / Final controls are reset to the current canonical values and locked from editing. Only entities explicitly set to <strong>Update</strong> can contribute canonical changes. Controlled reopen and concurrency protection remain in place.
+        Phase 8D.2d retains action-aware locking and adds normalization for Grist reference values that may be returned as either numeric row IDs, numeric strings, or Ref objects. This prevents valid reference fields such as Primary_Municipality from being falsely reported as failed updates.
       </div>
     </div>
 
@@ -1177,6 +1177,12 @@
 
   function refRowId(value) {
     if (typeof value === 'number') return value || null;
+
+    // Some Grist Desktop/reference paths surface a Ref as a numeric string.
+    // Normalize it exactly like the numeric row-id representation.
+    if (typeof value === 'string' && /^\s*\d+\s*$/.test(value)) {
+      return Number(value.trim()) || null;
+    }
 
     if (Array.isArray(value) && value[0] === 'R') {
       return Number(value[2]) || null;
