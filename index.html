@@ -413,7 +413,7 @@
 <div class="shell">
   <div class="header">
     <h1>Project ADry — Review & Promote</h1>
-    <p>Phase 8D.1b · Safe partial-promotion recovery + resume</p>
+    <p>Phase 8D.1c · Repair audited blank Provider + resume Program promotion</p>
   </div>
 
   <div id="waiting" class="waiting">
@@ -888,6 +888,7 @@
   let promotionInProgress = false;
   let promotionRecovery = {
     safeProviderResume: false,
+    repairBlankProvider: false,
     providerRowId: null,
     priorProgramFailure: null
   };
@@ -1223,6 +1224,7 @@
   async function determinePromotionRecovery(record) {
     const result = {
       safeProviderResume: false,
+      repairBlankProvider: false,
       providerRowId: null,
       priorProgramFailure: null
     };
@@ -1256,9 +1258,12 @@
       const draft = parseDraft(record.Provider_Review_Draft);
       const draftName = normalizeKey(draft && draft.fields && draft.fields.Provider_Name);
       const rowName = normalizeKey(providerRow && providerRow.Provider_Name);
+      const rowWebsite = normalizeUrl(providerRow && providerRow.Website);
+      const rowLooksBlank = providerRow && !rowName && !rowWebsite;
 
-      if (providerSuccess && providerRow && draftName && draftName === rowName) {
+      if (providerSuccess && providerRow && draftName && (draftName === rowName || rowLooksBlank)) {
         result.safeProviderResume = true;
+        result.repairBlankProvider = rowLooksBlank;
         result.providerRowId = providerRef;
       }
 
@@ -1318,7 +1323,12 @@
 
     if (providerAction === 'Create' && providerMatched) {
       if (promotionRecovery.safeProviderResume && !programMatched) {
-        add('warn', 'Provider was already created by this same approved submission. Safe resume will reuse that Provider and continue with Program creation.');
+        add(
+          'warn',
+          promotionRecovery.repairBlankProvider
+            ? 'An audited Provider row was created by this submission but its canonical fields are blank. Safe recovery will repair that same row from the approved draft, then continue with Program creation.'
+            : 'Provider was already created by this same approved submission. Safe resume will reuse that Provider and continue with Program creation.'
+        );
       } else {
         add('block', 'Provider is already matched; CREATE would risk a duplicate. Choose Update, No change, Verification required, or Reject.');
       }
@@ -1508,7 +1518,9 @@
       promotionStatus.textContent = 'Canonical promotion is already complete.';
     } else if (approved && createCreate && safeResume && isReadyStatus && result.ready && !isDirty) {
       promotionStatus.textContent =
-        'Safe resume is available: the Provider was already created by this submission and will be reused. ' +
+        (promotionRecovery.repairBlankProvider
+          ? 'Safe recovery is available: the Provider row created by this submission is blank and will be repaired from the approved draft before Program creation. '
+          : 'Safe resume is available: the Provider was already created by this submission and will be reused. ') +
         (promotionRecovery.priorProgramFailure
           ? 'Previous Program failure: ' + promotionRecovery.priorProgramFailure
           : 'The widget will continue with Program creation.');
@@ -1638,7 +1650,7 @@
       Suggestion_Source: 'Rules',
       Human_Decision: 'Approved',
       Override_Reason: '',
-      Implementation_Version: '8D.1b',
+      Implementation_Version: '8D.1c',
       Error_Detail: message
     };
 
@@ -1710,6 +1722,7 @@
       }
 
       let resumeProvider = false;
+      let repairProvider = false;
       if (existingProviderRowId) {
         const relatedProviderSuccess = promotionLogs.find(row =>
           displayValue(row.Source_Submission_ID) === sourceId &&
@@ -1726,13 +1739,21 @@
           providerDraftForCheck && providerDraftForCheck.fields && providerDraftForCheck.fields.Provider_Name
         );
 
+        const existingProviderName = normalizeKey(existingProviderRow && existingProviderRow.Provider_Name);
+        const existingProviderWebsite = normalizeUrl(existingProviderRow && existingProviderRow.Website);
+        const existingProviderLooksBlank =
+          existingProviderRow &&
+          !existingProviderName &&
+          !existingProviderWebsite;
+
         if (
           relatedProviderSuccess &&
           existingProviderRow &&
           draftProviderName &&
-          normalizeKey(existingProviderRow.Provider_Name) === draftProviderName
+          (existingProviderName === draftProviderName || existingProviderLooksBlank)
         ) {
           resumeProvider = true;
+          repairProvider = existingProviderLooksBlank;
         } else {
           throw new Error(
             'Existing Provider reference is present but cannot be proven as the Provider created by this submission. Manual review is required before retry.'
@@ -1819,9 +1840,11 @@
         (resumeProvider ? 'Resume this partial promotion now?\n\n' : 'Promote this approved submission now?\n\n') +
         'Provider: ' + providerName + '\n' +
         'Program: ' + programName + '\n\n' +
-        (resumeProvider
-          ? 'The existing Provider created by this same submission will be reused; only the missing Program will be created. '
-          : 'This will create live canonical Provider and Program records plus audit-log entries. ') +
+        (repairProvider
+          ? 'The audited blank Provider row created by this same submission will be repaired from the approved draft, then the missing Program will be created. '
+          : (resumeProvider
+              ? 'The existing Provider created by this same submission will be reused; only the missing Program will be created. '
+              : 'This will create live canonical Provider and Program records plus audit-log entries. ')) +
         'Eligibility and funding claims marked Verification required will remain unpromoted.'
       );
       if (!confirmed) {
@@ -1836,6 +1859,16 @@
 
       let providerCanonical = null;
       let providerCanonicalId = '';
+      const providerFields = {
+        Provider_Name: providerName,
+        Organization_Type: providerOrgType,
+        Website: providerWebsite,
+        Primary_Municipality: providerMunicipalityId,
+        Information_Source: requireText(p.Information_Source, 'Provider Information Source'),
+        Confidence_Status: requireText(p.Confidence_Status, 'Provider Confidence Status'),
+        Provider_Participation_Level: requireText(p.Provider_Participation_Level, 'Provider Participation Level')
+      };
+      if (nonBlank(p.Primary_Email)) providerFields.Primary_Email = String(p.Primary_Email).trim();
 
       if (resumeProvider) {
         providerRowId = existingProviderRowId;
@@ -1843,34 +1876,77 @@
         if (!providerCanonical) {
           throw new Error('Safe resume expected the previously created Provider row, but it no longer exists.');
         }
-        providerCanonicalId = displayValue(providerCanonical.Provider_ID) || '';
-        setSaveStatus(
-          'Safe resume verified. Reusing ' +
-          (providerCanonicalId || 'Provider row ' + providerRowId) +
-          ' and continuing with Program creation...'
-        );
+
+        if (repairProvider) {
+          setSaveStatus('Repairing the audited blank Provider row from the approved draft...');
+
+          await grist.docApi.applyUserActions([
+            ['UpdateRecord', 'Providers', providerRowId, providerFields]
+          ]);
+
+          providerCanonical = await waitForCanonicalRow('Providers', providerRowId, 'Provider_ID');
+          if (!providerCanonical || normalizeKey(providerCanonical.Provider_Name) !== normalizeKey(providerName)) {
+            throw new Error('The blank Provider row could not be repaired with the approved Provider draft.');
+          }
+
+          providerCanonicalId = displayValue(providerCanonical.Provider_ID) || '';
+          const nowRepair = Date.now() / 1000;
+          await grist.docApi.applyUserActions([
+            ['AddRecord', 'KB_Promotion_Log', null, {
+              Submission_Type: 'Provider Submission',
+              Source_Submission_ID: displayValue(rawSubmission.Submission_ID) || String(rawSubmission.id),
+              Entity_Type: 'Provider',
+              Action: 'Update',
+              Canonical_ID: providerCanonicalId,
+              Canonical_Row_ID: providerRowId,
+              Approved_By: displayValue(rawSubmission.Approved_By) || '',
+              Approved_By_Email: displayValue(rawSubmission.Approved_By_Email) || '',
+              Approved_On: dateTimeSeconds(rawSubmission.Approved_On),
+              Applied_By: appliedBy,
+              Applied_On: nowRepair,
+              Result: 'Success',
+              Changed_Fields: Object.keys(providerFields).join('\n'),
+              Previous_Values: JSON.stringify({ Provider_Name: '', Website: '' }),
+              Applied_Values: JSON.stringify({
+                ...providerFields,
+                Primary_Municipality_Label: providerMunicipalityText
+              }),
+              Suggestion_Source: displayValue(providerDraft.suggestion_source) || 'Rules',
+              Human_Decision: 'Approved',
+              Override_Reason: 'Recovery repair of blank Provider row created during earlier Phase 8D.1 promotion attempt.',
+              Implementation_Version: '8D.1c',
+              Error_Detail: ''
+            }]
+          ]);
+
+          setSaveStatus(
+            'Provider repaired successfully. Continuing with Program creation...'
+          );
+        } else {
+          providerCanonicalId = displayValue(providerCanonical.Provider_ID) || '';
+          setSaveStatus(
+            'Safe resume verified. Reusing ' +
+            (providerCanonicalId || 'Provider row ' + providerRowId) +
+            ' and continuing with Program creation...'
+          );
+        }
       } else {
         setSaveStatus('Creating canonical Provider...');
-        const providerFields = {
-          Provider_Name: providerName,
-          Organization_Type: providerOrgType,
-          Website: providerWebsite,
-          Primary_Municipality: providerMunicipalityId,
-          Information_Source: requireText(p.Information_Source, 'Provider Information Source'),
-          Confidence_Status: requireText(p.Confidence_Status, 'Provider Confidence Status'),
-          Provider_Participation_Level: requireText(p.Provider_Participation_Level, 'Provider Participation Level')
-        };
-        if (nonBlank(p.Primary_Email)) providerFields.Primary_Email = String(p.Primary_Email).trim();
-
         const providerCreated = await grist.getTable('Providers').create(
           { fields: providerFields },
           { parseStrings: false }
         );
         providerRowId = createdRowId(providerCreated);
 
+        // Defensive write-through for Grist Desktop builds: explicitly update the
+        // returned row with the approved values, then verify the canonical row.
+        await grist.docApi.applyUserActions([
+          ['UpdateRecord', 'Providers', providerRowId, providerFields]
+        ]);
+
         providerCanonical = await waitForCanonicalRow('Providers', providerRowId, 'Provider_ID');
-        if (!providerCanonical) {
-          throw new Error('Provider row was created but could not be reloaded for audit.');
+        if (!providerCanonical || normalizeKey(providerCanonical.Provider_Name) !== normalizeKey(providerName)) {
+          throw new Error('Provider row was created but its approved field values were not persisted.');
         }
 
         const nowProvider = Date.now() / 1000;
@@ -1903,7 +1979,7 @@
             Suggestion_Source: displayValue(providerDraft.suggestion_source) || 'Rules',
             Human_Decision: 'Approved',
             Override_Reason: '',
-            Implementation_Version: '8D.1b',
+            Implementation_Version: '8D.1c',
             Error_Detail: ''
           }]
         ]);
@@ -1940,9 +2016,14 @@
       );
       programRowId = createdRowId(programCreated);
 
+      // Same defensive write-through used for Provider creation.
+      await grist.docApi.applyUserActions([
+        ['UpdateRecord', 'Programs', programRowId, programFields]
+      ]);
+
       const programCanonical = await waitForCanonicalRow('Programs', programRowId, 'Program_ID');
-      if (!programCanonical) {
-        throw new Error('Program row was created but could not be reloaded for audit.');
+      if (!programCanonical || normalizeKey(programCanonical.Program_Name) !== normalizeKey(programName)) {
+        throw new Error('Program row was created but its approved field values were not persisted.');
       }
 
       const nowProgram = Date.now() / 1000;
@@ -1981,7 +2062,7 @@
           Suggestion_Source: displayValue(programDraft.suggestion_source) || 'Rules',
           Human_Decision: 'Approved',
           Override_Reason: '',
-          Implementation_Version: '8D.1b',
+          Implementation_Version: '8D.1c',
           Error_Detail: ''
         }]
       ]);
@@ -1995,6 +2076,7 @@
       currentRecord.Review_Status = 'Completed';
       promotionRecovery = {
         safeProviderResume: false,
+        repairBlankProvider: false,
         providerRowId: null,
         priorProgramFailure: null
       };
@@ -2096,7 +2178,9 @@
 
     document.getElementById('providerMatchNotice').textContent =
       promotionRecovery.safeProviderResume
-        ? 'This Provider was created by an earlier partial promotion of the same submission. The audit log proves ownership, so Phase 8D.1b may safely reuse it and resume at Program creation.'
+        ? (promotionRecovery.repairBlankProvider
+            ? 'This submission points to an audited Provider row created by the earlier promotion attempt, but the Provider display fields are blank. Phase 8D.1c will repair that same row from the approved draft before resuming Program creation.'
+            : 'This Provider was created by an earlier partial promotion of the same submission. The audit log proves ownership, so Phase 8D.1c may safely reuse it and resume at Program creation.')
         : (hasValue(record.Existing_Provider)
             ? 'An existing Provider is matched. Current KB values are shown beside the submission so the reviewer can focus on differences.'
             : 'No existing Provider is matched. The default action is CREATE; reviewer approval will still be required before canonical promotion.');
@@ -2315,7 +2399,10 @@
     const persisted = persistedPromotionMessage(record);
     if (promotionRecovery.safeProviderResume && promotionRecovery.priorProgramFailure) {
       setSaveStatus(
-        'Safe resume available. Previous Program failure: ' + promotionRecovery.priorProgramFailure,
+        (promotionRecovery.repairBlankProvider
+          ? 'Safe repair + resume available. '
+          : 'Safe resume available. ') +
+        'Previous Program failure: ' + promotionRecovery.priorProgramFailure,
         'error'
       );
     } else if (persisted) {
