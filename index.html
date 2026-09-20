@@ -446,7 +446,7 @@
 <div class="shell">
   <div class="header">
     <h1>Project ADry — Review & Promote</h1>
-    <p>Phase 8D.2d · Grist reference normalization fix</p>
+    <p>Phase 8D.2e · Provider municipality text normalization fix</p>
   </div>
 
   <div id="waiting" class="waiting">
@@ -899,7 +899,7 @@
       <div id="approvalStatus" class="approval-status"></div>
       <div id="promotionStatus" class="approval-status"></div>
       <div class="approval-note">
-        Phase 8D.2d retains action-aware locking and adds normalization for Grist reference values that may be returned as either numeric row IDs, numeric strings, or Ref objects. This prevents valid reference fields such as Primary_Municipality from being falsely reported as failed updates.
+        Phase 8D.2e aligns the widget with the current DEV schema: <strong>Providers.Primary_Municipality</strong> is stored as municipality text, while Program municipality handling remains reference-aware. Numeric legacy values such as <strong>2</strong> are normalized back to the matching municipality label before Provider writes.
       </div>
     </div>
 
@@ -1354,7 +1354,13 @@
     if (['Age_Band', 'Delivery_Mode', 'Days_Offered', 'Time_of_Day'].includes(field)) {
       return sameChoiceList(currentValue, desiredValue);
     }
-    if (['Primary_Municipality', 'Provider'].includes(field)) {
+    if (field === 'Primary_Municipality') {
+      if (typeof desiredValue === 'number') {
+        return refRowId(currentValue) === desiredValue;
+      }
+      return normalizeKey(currentValue) === normalizeKey(desiredValue);
+    }
+    if (field === 'Provider') {
       return refRowId(currentValue) === (typeof desiredValue === 'number' ? desiredValue : refRowId(desiredValue));
     }
     return scalarCompare(currentValue) === scalarCompare(desiredValue);
@@ -1444,6 +1450,16 @@
       throw new Error(label + ' "' + locationText + '" does not exactly match a Municipality in Locations.');
     }
     throw new Error(label + ' "' + locationText + '" matches more than one Locations row. Resolve the duplicate before promotion.');
+  }
+
+  function resolveLocationText(locationValue, locations, label) {
+    const rowId = resolveLocationRowId(locationValue, locations, label);
+    const row = locations.find(item => Number(item.id) === Number(rowId));
+    const municipality = row && displayValue(row.Municipality);
+    if (!municipality) {
+      throw new Error(label + ' could not be normalized to a municipality label.');
+    }
+    return municipality;
   }
 
   async function fetchTableRows(tableId) {
@@ -2162,6 +2178,11 @@
         locations,
         'Provider Primary Municipality'
       );
+      const providerMunicipalityCanonicalText = resolveLocationText(
+        providerMunicipalityText,
+        locations,
+        'Provider Primary Municipality'
+      );
       const programMunicipalityId = resolveLocationRowId(
         programMunicipalityText,
         locations,
@@ -2225,7 +2246,7 @@
         Provider_Name: providerName,
         Organization_Type: providerOrgType,
         Website: providerWebsite,
-        Primary_Municipality: providerMunicipalityId,
+        Primary_Municipality: providerMunicipalityCanonicalText,
         Information_Source: requireText(p.Information_Source, 'Provider Information Source'),
         Confidence_Status: requireText(p.Confidence_Status, 'Provider Confidence Status'),
         Provider_Participation_Level: requireText(p.Provider_Participation_Level, 'Provider Participation Level')
@@ -2512,7 +2533,7 @@
           Suggestion_Source: 'Rules',
           Human_Decision: 'Approved',
           Override_Reason: '',
-          Implementation_Version: '8D.2b',
+          Implementation_Version: '8D.2e',
           Error_Detail: message
         }]
       ]);
@@ -2604,7 +2625,7 @@
         Provider_Name: requireText(p.Provider_Name, 'Provider Name'),
         Website: scalarCompare(p.Website),
         Organization_Type: scalarCompare(p.Organization_Type),
-        Primary_Municipality: resolveLocationRowId(
+        Primary_Municipality: resolveLocationText(
           requireText(p.Primary_Municipality, 'Provider Primary Municipality'),
           locations,
           'Provider Primary Municipality'
@@ -2757,7 +2778,7 @@
           Suggestion_Source: displayValue(providerDraft.suggestion_source) || 'Rules',
           Human_Decision: 'Approved',
           Override_Reason: '',
-          Implementation_Version: '8D.2b',
+          Implementation_Version: '8D.2e',
           Error_Detail: ''
         }]);
       }
@@ -2782,7 +2803,7 @@
           Suggestion_Source: displayValue(programDraft.suggestion_source) || 'Rules',
           Human_Decision: 'Approved',
           Override_Reason: '',
-          Implementation_Version: '8D.2b',
+          Implementation_Version: '8D.2e',
           Error_Detail: ''
         }]);
       }
@@ -3174,7 +3195,7 @@
     }
 
     return {
-      version: '8D.2b',
+      version: '8D.2e',
       suggestion_source: 'Rules',
       action: getControl('providerAction'),
       baseline: buildBaseline(
@@ -3200,7 +3221,7 @@
     }
 
     return {
-      version: '8D.2b',
+      version: '8D.2e',
       suggestion_source: 'Rules',
       action: getControl('programAction'),
       baseline: buildBaseline(
