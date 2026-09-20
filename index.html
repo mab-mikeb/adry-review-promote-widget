@@ -413,7 +413,7 @@
 <div class="shell">
   <div class="header">
     <h1>Project ADry — Review & Promote</h1>
-    <p>Phase 8D.1 · Approved Create/Create canonical promotion + audit logging</p>
+    <p>Phase 8D.1a · Persistent promotion error/status diagnostics</p>
   </div>
 
   <div id="waiting" class="waiting">
@@ -1090,6 +1090,37 @@
     element.className = 'save-status' + (kind ? ' ' + kind : '');
   }
 
+  function persistedPromotionMessage(record) {
+    if (!record) return null;
+    const result = displayValue(record.Promotion_Result);
+    const error = displayValue(record.Promotion_Error);
+
+    if (result === 'Partial') {
+      return {
+        kind: 'error',
+        text: 'PARTIAL PROMOTION — Provider may already have been created. ' +
+          (error ? 'Error: ' + error : 'Review Promotion_Error before taking any further action.')
+      };
+    }
+
+    if (result === 'Failed') {
+      return {
+        kind: 'error',
+        text: 'PROMOTION FAILED — ' +
+          (error ? error : 'Review Promotion_Error before retrying.')
+      };
+    }
+
+    if (result === 'Success') {
+      return {
+        kind: 'success',
+        text: 'Canonical promotion completed successfully.'
+      };
+    }
+
+    return null;
+  }
+
   function markDirty() {
     if (isRendering) return;
     isDirty = true;
@@ -1381,8 +1412,12 @@
       !noExistingRefs ||
       alreadySucceeded;
 
+    const persisted = currentRecord ? persistedPromotionMessage(currentRecord) : null;
+
     if (promotionInProgress) {
       promotionStatus.textContent = 'Promotion is running. Do not close or refresh the widget.';
+    } else if (persisted && displayValue(currentRecord.Promotion_Result) !== 'Success') {
+      promotionStatus.textContent = persisted.text;
     } else if (alreadySucceeded) {
       promotionStatus.textContent = 'Canonical promotion is already complete.';
     } else if (approved && createCreate && noExistingRefs && isReadyStatus && result.ready && !isDirty) {
@@ -1817,13 +1852,13 @@
           Boolean(providerRowId || programRowId)
         );
       }
-      setSaveStatus(
+      const failureMessage =
         'Promotion stopped at ' + stage + ': ' + message +
         (providerRowId || programRowId
           ? ' A canonical record may already exist; do not manually retry or create duplicates until this is reviewed.'
-          : ''),
-        'error'
-      );
+          : '');
+      setSaveStatus(failureMessage, 'error');
+      window.alert(failureMessage);
     } finally {
       promotionInProgress = false;
       updateReadiness();
@@ -2104,11 +2139,16 @@
     setControl('draftReviewerNotes', programDraft.reviewer_notes || '');
 
     isDirty = false;
-    setSaveStatus(
-      providerDraft.version || programDraft.version
-        ? 'Saved draft loaded.'
-        : 'No saved review draft yet.'
-    );
+    const persisted = persistedPromotionMessage(record);
+    if (persisted) {
+      setSaveStatus(persisted.text, persisted.kind);
+    } else {
+      setSaveStatus(
+        providerDraft.version || programDraft.version
+          ? 'Saved draft loaded.'
+          : 'No saved review draft yet.'
+      );
+    }
 
     isRendering = false;
     updateReadiness();
