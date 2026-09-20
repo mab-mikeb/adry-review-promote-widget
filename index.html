@@ -206,11 +206,17 @@
     .review-table th:nth-child(3) { width: 30%; }
     .review-table th:nth-child(4) { width: 23%; }
 
-    .canonical-table th:nth-child(1) { width: 16%; }
-    .canonical-table th:nth-child(2) { width: 20%; }
-    .canonical-table th:nth-child(3) { width: 20%; }
+    .canonical-table th:nth-child(1) { width: 21%; }
+    .canonical-table th:nth-child(2) { width: 19%; }
+    .canonical-table th:nth-child(3) { width: 19%; }
     .canonical-table th:nth-child(4) { width: 25%; }
-    .canonical-table th:nth-child(5) { width: 19%; }
+    .canonical-table th:nth-child(5) { width: 16%; }
+
+    .canonical-table td:nth-child(1) {
+      white-space: nowrap;
+      font-size: 12px;
+      word-break: normal;
+    }
 
     .rule-badge {
       display: inline-block;
@@ -413,6 +419,11 @@
       .review-table td:nth-child(3)::before { content: "Decision / final"; }
       .review-table td:nth-child(4)::before { content: "Reason / rule"; }
 
+      .canonical-table td:nth-child(1) {
+        white-space: normal;
+        font-size: 13px;
+      }
+
       .canonical-table td:nth-child(1)::before { content: "Canonical field"; }
       .canonical-table td:nth-child(2)::before { content: "Current KB"; }
       .canonical-table td:nth-child(3)::before { content: "Submitted"; }
@@ -435,7 +446,7 @@
 <div class="shell">
   <div class="header">
     <h1>Project ADry — Review & Promote</h1>
-    <p>Phase 8D.2b · Action-aware review locking + no-change protection</p>
+    <p>Phase 8D.2c · Review-table label layout polish</p>
   </div>
 
   <div id="waiting" class="waiting">
