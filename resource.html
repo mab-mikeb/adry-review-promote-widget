@@ -168,7 +168,7 @@
 <div class="shell">
   <div class="header">
     <h1>Project ADry — Resource Review & Promote</h1>
-    <p>Phase 9A.1 · Canonical comparison + editable Resource review draft</p>
+    <p>Phase 9A.1a · Canonical comparison + completed-record protection</p>
   </div>
 
   <div id="waiting" class="waiting">Select a resource submission in Grist.</div>
@@ -501,12 +501,25 @@
     }
 
     const approved = currentRecord.Promotion_Approved === true || currentRecord.Promotion_Approved === 1;
-    setReviewLocked(approved, action === 'No change');
+    const completed = displayValue(currentRecord.Review_Status) === 'Completed';
+    setReviewLocked(approved || completed, action === 'No change');
 
     isDirty = false;
-    setSaveStatus(
-      draft.version ? 'Saved Resource review draft loaded.' : 'No saved Resource review draft yet.'
-    );
+    if (completed) {
+      setSaveStatus(
+        'This Resource submission is already Completed and is locked as historical workflow evidence.',
+        'success'
+      );
+    } else if (currentResource && action === 'Create') {
+      setSaveStatus(
+        'Existing Resource is matched but Resource Action is Create. Do not reuse this row for update QA; use a fresh submission and choose Update.',
+        'error'
+      );
+    } else {
+      setSaveStatus(
+        draft.version ? 'Saved Resource review draft loaded.' : 'No saved Resource review draft yet.'
+      );
+    }
     isRendering = false;
   }
 
@@ -531,6 +544,11 @@
 
     if (currentRecord.Promotion_Approved === true || currentRecord.Promotion_Approved === 1) {
       setSaveStatus('This Resource review is already approved and locked.', 'error');
+      return;
+    }
+
+    if (displayValue(currentRecord.Review_Status) === 'Completed') {
+      setSaveStatus('This Resource submission is Completed and cannot be reused for a new review.', 'error');
       return;
     }
 
