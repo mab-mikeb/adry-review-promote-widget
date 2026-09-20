@@ -266,6 +266,78 @@
     .save-status.error { color: #9b1c1c; }
     .save-status.success { color: #246b2d; }
 
+    .readiness-panel {
+      margin: 0 22px 18px;
+      padding: 16px;
+      border: 1px solid #ccc;
+      border-radius: 7px;
+      background: #fafafa;
+    }
+
+    .readiness-panel h2 {
+      margin: 0 0 8px;
+      font-size: 16px;
+    }
+
+    .readiness-headline {
+      margin-bottom: 10px;
+      font-weight: 700;
+    }
+
+    .readiness-list {
+      margin: 0 0 12px;
+      padding-left: 20px;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .readiness-list li.ok { color: #246b2d; }
+    .readiness-list li.warn { color: #7a5b00; }
+    .readiness-list li.block { color: #9b1c1c; }
+
+    .readiness-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .secondary-button,
+    .approval-button {
+      border: 1px solid #777;
+      border-radius: 6px;
+      padding: 9px 14px;
+      font-weight: 700;
+      cursor: pointer;
+      background: #fff;
+      color: #222;
+    }
+
+    .approval-button {
+      background: #222;
+      color: #fff;
+      border-color: #222;
+    }
+
+    .secondary-button:disabled,
+    .approval-button:disabled {
+      opacity: .45;
+      cursor: default;
+    }
+
+    .approval-status {
+      margin-top: 10px;
+      font-size: 13px;
+      color: #555;
+    }
+
+    .approval-note {
+      margin-top: 8px;
+      font-size: 12px;
+      color: #666;
+      line-height: 1.4;
+    }
+
     .waiting {
       padding: 50px 20px;
       text-align: center;
@@ -333,7 +405,7 @@
 <div class="shell">
   <div class="header">
     <h1>Project ADry — Review & Promote</h1>
-    <p>Phase 8C.2 · Canonical comparison + editable review drafts</p>
+    <p>Phase 8C.3 · Readiness validation + human approval gate</p>
   </div>
 
   <div id="waiting" class="waiting">
@@ -771,6 +843,22 @@
       </div>
     </div>
 
+    <div class="readiness-panel">
+      <h2>Promotion readiness</h2>
+      <div id="readinessHeadline" class="readiness-headline">Complete the review draft to evaluate readiness.</div>
+      <ul id="readinessList" class="readiness-list"></ul>
+
+      <div class="readiness-actions">
+        <button id="markReady" class="secondary-button" disabled>Mark Ready to Promote</button>
+        <button id="recordApproval" class="approval-button" disabled>Record Human Approval</button>
+      </div>
+
+      <div id="approvalStatus" class="approval-status"></div>
+      <div class="approval-note">
+        Human approval is an authorization gate only. This phase does not create or update canonical Provider, Program, Eligibility, or Funding records.
+      </div>
+    </div>
+
     <div class="save-bar">
       <button id="saveDraft" class="save-button">Save Review Draft</button>
       <span id="saveStatus" class="save-status">No unsaved changes.</span>
@@ -786,6 +874,7 @@
   let currentRecord = null;
   let isDirty = false;
   let isRendering = false;
+  let lastReadiness = null;
 
   function displayValue(value) {
     if (value === null || value === undefined || value === '') return null;
@@ -994,6 +1083,289 @@
     if (isRendering) return;
     isDirty = true;
     setSaveStatus('Unsaved changes. Save before selecting another submission.');
+    updateReadiness();
+  }
+
+  function nonBlank(value) {
+    return String(value ?? '').trim().length > 0;
+  }
+
+  function boolValue(value) {
+    return value === true || value === 1 || value === '1' || value === 'true';
+  }
+
+  function validateReadiness() {
+    const checks = [];
+    const add = (level, message) => checks.push({ level, message });
+
+    if (!currentRecord) {
+      add('block', 'No submission is selected.');
+      return { ready: false, checks };
+    }
+
+    const providerAction = getControl('providerAction');
+    const programAction = getControl('programAction');
+    const providerMatched = hasValue(currentRecord.Existing_Provider);
+    const programMatched = hasValue(currentRecord.Existing_Program);
+
+    const providerDraftSaved = !!parseDraft(currentRecord.Provider_Review_Draft);
+    const programDraftSaved = !!parseDraft(currentRecord.Program_Review_Draft);
+    const draftSaved = providerDraftSaved && programDraftSaved && !isDirty;
+
+    add(
+      draftSaved ? 'ok' : 'block',
+      draftSaved
+        ? 'Review draft is saved.'
+        : (isDirty ? 'Review has unsaved changes.' : 'Review draft has not been saved yet.')
+    );
+
+    add(
+      providerAction ? 'ok' : 'block',
+      providerAction ? 'Provider decision: ' + providerAction + '.' : 'Provider action is not selected.'
+    );
+
+    add(
+      programAction ? 'ok' : 'block',
+      programAction ? 'Program decision: ' + programAction + '.' : 'Program action is not selected.'
+    );
+
+    if (providerAction === 'Create' && providerMatched) {
+      add('block', 'Provider is already matched; CREATE would risk a duplicate. Choose Update, No change, Verification required, or Reject.');
+    }
+
+    if (providerAction === 'Update' && !providerMatched) {
+      add('block', 'Provider action is UPDATE but no existing Provider is matched.');
+    }
+
+    if (providerAction === 'No change' && !providerMatched) {
+      add('block', 'Provider action is NO CHANGE but no existing Provider is matched.');
+    }
+
+    if (providerAction === 'Verification required') {
+      add('block', 'Provider-level verification is unresolved. Complete verification before promotion.');
+    }
+
+    if (providerAction === 'Reject') {
+      add('block', 'Provider action is REJECT. Rejected entity decisions are not promoted.');
+    }
+
+    if (programAction === 'Create' && programMatched) {
+      add('block', 'Program is already matched; CREATE would risk a duplicate. Choose Update, No change, Verification required, or Reject.');
+    }
+
+    if (programAction === 'Update' && !programMatched) {
+      add('block', 'Program action is UPDATE but no existing Program is matched.');
+    }
+
+    if (programAction === 'No change' && !programMatched) {
+      add('block', 'Program action is NO CHANGE but no existing Program is matched.');
+    }
+
+    if (programAction === 'Verification required') {
+      add('block', 'Program-level verification is unresolved. Complete verification before promotion.');
+    }
+
+    if (programAction === 'Reject') {
+      add('block', 'Program action is REJECT. Rejected entity decisions are not promoted.');
+    }
+
+    if (!providerMatched && ['Create', 'Update'].includes(programAction) && providerAction !== 'Create') {
+      add('block', 'The Program needs a Provider relationship. With no matched Provider, Provider action must be CREATE before the Program can be promoted.');
+    }
+
+    if (providerAction === 'Create') {
+      add(nonBlank(getControl('p_final_name')) ? 'ok' : 'block', 'New Provider has a Provider Name.');
+      add(nonBlank(getControl('p_final_website')) ? 'ok' : 'block', 'New Provider has a Website.');
+      add(nonBlank(getControl('p_final_orgtype')) ? 'ok' : 'block', 'New Provider has an Organization Type.');
+      add(nonBlank(getControl('p_final_municipality')) ? 'ok' : 'block', 'New Provider has a Primary Municipality.');
+    }
+
+    if (providerAction === 'Update') {
+      add(nonBlank(getControl('p_final_name')) ? 'ok' : 'block', 'Updated Provider retains a Provider Name.');
+    }
+
+    if (programAction === 'Create') {
+      add(nonBlank(getControl('g_final_name')) ? 'ok' : 'block', 'New Program has a Program Name.');
+      add(nonBlank(getControl('g_final_summary')) ? 'ok' : 'block', 'New Program has a Program Summary.');
+      add(nonBlank(getControl('g_final_category')) ? 'ok' : 'block', 'New Program has a Program Category.');
+      add(nonBlank(getControl('g_final_delivery')) ? 'ok' : 'block', 'New Program has a Delivery Mode.');
+      add(getChoiceList('g_final_age').length > 0 ? 'ok' : 'block', 'New Program has at least one Age Band.');
+      add(nonBlank(getControl('g_final_municipality')) ? 'ok' : 'block', 'New Program has a Primary Municipality for later Locations resolution.');
+    }
+
+    if (programAction === 'Update') {
+      add(nonBlank(getControl('g_final_name')) ? 'ok' : 'block', 'Updated Program retains a Program Name.');
+    }
+
+    const eligibilitySubmitted = hasValue(currentRecord.Eligibility_Information);
+    const fundingSubmitted = hasValue(currentRecord.Funding_Information);
+    const eligibilityDecision = getControl('c_decision_eligibility');
+    const fundingDecision = getControl('c_decision_funding');
+
+    if (eligibilitySubmitted) {
+      add(
+        eligibilityDecision ? (eligibilityDecision === 'Verification required' ? 'warn' : 'ok') : 'block',
+        eligibilityDecision
+          ? 'Eligibility claim decision: ' + eligibilityDecision + '.'
+          : 'Eligibility information was submitted but no claim decision is selected.'
+      );
+    }
+
+    if (fundingSubmitted) {
+      add(
+        fundingDecision ? (fundingDecision === 'Verification required' ? 'warn' : 'ok') : 'block',
+        fundingDecision
+          ? 'Funding claim decision: ' + fundingDecision + '.'
+          : 'Funding information was submitted but no claim decision is selected.'
+      );
+    }
+
+    if (eligibilityDecision === 'Verification required' || fundingDecision === 'Verification required') {
+      add('warn', 'Claim verification remains outside this promotion. Provider/Program promotion may proceed without promoting those unverified claims.');
+    }
+
+    const ready = !checks.some(check => check.level === 'block');
+    return { ready, checks };
+  }
+
+  function setReviewLocked(locked) {
+    document.querySelectorAll(
+      '.action-strip select, .content input, .content select, .content textarea'
+    ).forEach(control => {
+      control.disabled = locked;
+    });
+
+    const saveButton = document.getElementById('saveDraft');
+    if (saveButton) saveButton.disabled = locked;
+  }
+
+  function updateReadiness() {
+    const result = validateReadiness();
+    lastReadiness = result;
+
+    const list = document.getElementById('readinessList');
+    const headline = document.getElementById('readinessHeadline');
+    const readyButton = document.getElementById('markReady');
+    const approvalButton = document.getElementById('recordApproval');
+    const approvalStatus = document.getElementById('approvalStatus');
+
+    if (!list || !headline || !readyButton || !approvalButton || !approvalStatus) return;
+
+    list.innerHTML = '';
+    result.checks.forEach(check => {
+      const item = document.createElement('li');
+      item.className = check.level;
+      item.textContent =
+        (check.level === 'ok' ? '✓ ' : check.level === 'warn' ? '⚠ ' : '✕ ') +
+        check.message;
+      list.appendChild(item);
+    });
+
+    const approved = currentRecord && boolValue(currentRecord.Promotion_Approved);
+    const status = currentRecord ? displayValue(currentRecord.Review_Status) : null;
+    const isReadyStatus = status === 'Ready to Promote';
+
+    if (approved) {
+      headline.textContent = 'Human approval recorded.';
+    } else if (result.ready && isReadyStatus) {
+      headline.textContent = 'Ready for human approval.';
+    } else if (result.ready) {
+      headline.textContent = 'Review passes validation and can be marked Ready to Promote.';
+    } else {
+      headline.textContent = 'Resolve the blocking items before promotion.';
+    }
+
+    readyButton.disabled = approved || !result.ready || isReadyStatus;
+    approvalButton.disabled = approved || !result.ready || !isReadyStatus || isDirty;
+
+    if (approved) {
+      const who = displayValue(currentRecord.Approved_By) || 'Recorded approver';
+      const email = displayValue(currentRecord.Approved_By_Email);
+      const when = displayValue(currentRecord.Approved_On);
+      approvalStatus.textContent =
+        'Approved by ' + who +
+        (email ? ' (' + email + ')' : '') +
+        (when ? ' on ' + when : '') +
+        '. The review is locked.';
+      setReviewLocked(true);
+    } else {
+      approvalStatus.textContent =
+        isReadyStatus
+          ? 'Status is Ready to Promote. Record Human Approval only after reviewing the final saved draft.'
+          : 'Approval is not yet recorded.';
+      setReviewLocked(false);
+    }
+  }
+
+  async function markReadyToPromote() {
+    if (!currentRecord || !currentRecord.id) return;
+
+    const result = validateReadiness();
+    if (!result.ready) {
+      setSaveStatus('Cannot mark ready: resolve the blocking readiness items first.', 'error');
+      updateReadiness();
+      return;
+    }
+
+    if (isDirty) {
+      setSaveStatus('Save the review draft before marking it Ready to Promote.', 'error');
+      return;
+    }
+
+    try {
+      await grist.docApi.applyUserActions([
+        ['UpdateRecord', 'Provider_Submissions', currentRecord.id, {
+          Review_Status: 'Ready to Promote'
+        }]
+      ]);
+
+      currentRecord.Review_Status = 'Ready to Promote';
+      put('statusBadge', 'Status: Ready to Promote');
+      setSaveStatus('Submission marked Ready to Promote.', 'success');
+      updateReadiness();
+    } catch (err) {
+      console.error(err);
+      setSaveStatus('Could not mark Ready to Promote: ' + (err && err.message ? err.message : String(err)), 'error');
+    }
+  }
+
+  async function recordHumanApproval() {
+    if (!currentRecord || !currentRecord.id) return;
+
+    const result = validateReadiness();
+    const status = displayValue(currentRecord.Review_Status);
+
+    if (!result.ready || status !== 'Ready to Promote' || isDirty) {
+      setSaveStatus('Approval blocked: the review must be saved, pass readiness validation, and have status Ready to Promote.', 'error');
+      updateReadiness();
+      return;
+    }
+
+    if (boolValue(currentRecord.Promotion_Approved)) {
+      setSaveStatus('Human approval is already recorded.', 'error');
+      return;
+    }
+
+    const confirmed = window.confirm(
+      'Record human approval for this saved review draft? This will set Promotion_Approved, but it will NOT promote canonical records yet.'
+    );
+
+    if (!confirmed) return;
+
+    try {
+      await grist.docApi.applyUserActions([
+        ['UpdateRecord', 'Provider_Submissions', currentRecord.id, {
+          Promotion_Approved: true
+        }]
+      ]);
+
+      currentRecord.Promotion_Approved = true;
+      setSaveStatus('Human approval recorded. Canonical promotion has not run.', 'success');
+      updateReadiness();
+    } catch (err) {
+      console.error(err);
+      setSaveStatus('Approval failed: ' + (err && err.message ? err.message : String(err)), 'error');
+    }
   }
 
   function inferredEntityAction(existingReference) {
@@ -1277,11 +1649,12 @@
     );
 
     isRendering = false;
+    updateReadiness();
   }
 
   function collectProviderDraft() {
     return {
-      version: '8C.2',
+      version: '8C.3',
       suggestion_source: 'Rules',
       action: getControl('providerAction'),
       fields: {
@@ -1299,7 +1672,7 @@
 
   function collectProgramDraft() {
     return {
-      version: '8C.2',
+      version: '8C.3',
       suggestion_source: 'Rules',
       action: getControl('programAction'),
       fields: {
@@ -1332,6 +1705,11 @@
       return;
     }
 
+    if (boolValue(currentRecord.Promotion_Approved)) {
+      setSaveStatus('This review is already approved and locked. Do not alter an approved draft.', 'error');
+      return;
+    }
+
     const providerAction = getControl('providerAction');
     const programAction = getControl('programAction');
 
@@ -1354,7 +1732,7 @@
       Program_Review_Draft: JSON.stringify(programDraft)
     };
 
-    if (displayValue(currentRecord.Review_Status) === 'New') {
+    if (['New', 'Ready to Promote'].includes(displayValue(currentRecord.Review_Status))) {
       updates.Review_Status = 'In Review';
     }
 
@@ -1375,6 +1753,7 @@
 
       isDirty = false;
       setSaveStatus('Review draft saved to Provider_Submissions.', 'success');
+      updateReadiness();
     } catch (err) {
       console.error(err);
       setSaveStatus('Save failed: ' + (err && err.message ? err.message : String(err)), 'error');
@@ -1405,6 +1784,8 @@
   });
 
   document.getElementById('saveDraft').addEventListener('click', saveDraft);
+  document.getElementById('markReady').addEventListener('click', markReadyToPromote);
+  document.getElementById('recordApproval').addEventListener('click', recordHumanApproval);
 </script>
 </body>
 </html>
