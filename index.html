@@ -143,6 +143,26 @@
     .panel { display: none; }
     .panel.active { display: block; }
 
+    .panel.entity-no-change .canonical-table {
+      opacity: .72;
+    }
+
+    .panel.entity-no-change .section-title::after {
+      content: " · NO CHANGE";
+      font-size: 11px;
+      font-weight: 700;
+      color: #666;
+      letter-spacing: .04em;
+    }
+
+    .tab.no-change {
+      color: #666;
+    }
+
+    .tab.update {
+      color: #1f5f2c;
+    }
+
     .notice {
       padding: 12px 14px;
       margin-bottom: 18px;
@@ -415,7 +435,7 @@
 <div class="shell">
   <div class="header">
     <h1>Project ADry — Review & Promote</h1>
-    <p>Phase 8D.2a · Controlled reopen + resilient reference handling</p>
+    <p>Phase 8D.2b · Action-aware review locking + no-change protection</p>
   </div>
 
   <div id="waiting" class="waiting">
@@ -868,7 +888,7 @@
       <div id="approvalStatus" class="approval-status"></div>
       <div id="promotionStatus" class="approval-status"></div>
       <div class="approval-note">
-        Phase 8D.2a adds a controlled <strong>Reopen Approved Review</strong> path for corrections discovered before a successful promotion. Reopening clears the old approval/application stamps, returns the submission to In Review, and preserves failure audit-log records. Updates still write only approved changed fields and block on concurrent canonical changes.
+        Phase 8D.2b makes entity decisions explicit in the review UI. When Provider or Program is set to <strong>No change</strong>, that entity's Suggested / Final controls are reset to the current canonical values and locked from editing. Only entities explicitly set to <strong>Update</strong> can contribute canonical changes. Controlled reopen and concurrency protection remain in place.
       </div>
     </div>
 
@@ -971,6 +991,119 @@
     return Array.from(
       container.querySelectorAll('input[type="checkbox"]:checked')
     ).map(box => box.value);
+  }
+
+  function syncProviderControlsToCanonical() {
+    const provider = currentCanonicalContext.provider;
+    if (!provider) return;
+
+    setControl('p_final_name', displayValue(provider.Provider_Name) || '');
+    setControl('p_final_website', displayValue(provider.Website) || '');
+    setControl('p_final_orgtype', displayValue(provider.Organization_Type) || '');
+    setControl(
+      'p_final_municipality',
+      locationLabel(provider.Primary_Municipality, currentCanonicalContext.locationsById)
+    );
+    setControl('p_final_source', displayValue(provider.Information_Source) || '');
+    setControl('p_final_confidence', displayValue(provider.Confidence_Status) || '');
+    setControl(
+      'p_final_participation',
+      displayValue(provider.Provider_Participation_Level) || ''
+    );
+    setControl('p_final_email', displayValue(provider.Primary_Email) || '');
+  }
+
+  function syncProgramControlsToCanonical() {
+    const program = currentCanonicalContext.program;
+    if (!program) return;
+
+    setControl('g_final_name', displayValue(program.Program_Name) || '');
+    setControl('g_final_url', displayValue(program.Program_URL) || '');
+    setControl('g_final_summary', displayValue(program.Program_Summary) || '');
+    setControl('g_final_delivery', displayValue(program.Delivery_Mode) || '');
+    setControl('g_final_days', displayValue(program.Days_Offered) || '');
+    setControl('g_final_time', displayValue(program.Time_of_Day) || '');
+    setControl('g_final_costnotes', displayValue(program.Cost_Notes) || '');
+    setControl('g_final_source', displayValue(program.Information_Source) || '');
+    setControl('g_final_confidence', displayValue(program.Confidence_Status) || '');
+    setControl('g_final_category', displayValue(program.Program_Category) || '');
+    setChoiceList('g_final_age', normalizeChoiceListValue(program.Age_Band));
+    setControl(
+      'g_final_municipality',
+      locationLabel(program.Primary_Municipality, currentCanonicalContext.locationsById)
+    );
+    setControl('g_final_costbasis', displayValue(program.Cost_Basis) || '');
+  }
+
+  function updateActionTabs() {
+    const providerAction = getControl('providerAction');
+    const programAction = getControl('programAction');
+    const providerTab = document.querySelector('.tab[data-tab="provider"]');
+    const programTab = document.querySelector('.tab[data-tab="program"]');
+
+    if (providerTab) {
+      providerTab.textContent = providerAction ? 'Provider · ' + providerAction : 'Provider';
+      providerTab.classList.toggle('no-change', providerAction === 'No change');
+      providerTab.classList.toggle('update', providerAction === 'Update');
+    }
+
+    if (programTab) {
+      programTab.textContent = programAction ? 'Program · ' + programAction : 'Program';
+      programTab.classList.toggle('no-change', programAction === 'No change');
+      programTab.classList.toggle('update', programAction === 'Update');
+    }
+  }
+
+  function applyEntityActionState(globalLocked = false) {
+    const providerAction = getControl('providerAction');
+    const programAction = getControl('programAction');
+    const providerNoChange = providerAction === 'No change';
+    const programNoChange = programAction === 'No change';
+
+    const providerPanel = document.getElementById('provider');
+    const programPanel = document.getElementById('program');
+
+    if (providerPanel) {
+      providerPanel.classList.toggle('entity-no-change', providerNoChange);
+      providerPanel.querySelectorAll('input, select, textarea').forEach(control => {
+        control.disabled = globalLocked || providerNoChange;
+      });
+    }
+
+    if (programPanel) {
+      programPanel.classList.toggle('entity-no-change', programNoChange);
+      programPanel.querySelectorAll('input, select, textarea').forEach(control => {
+        control.disabled = globalLocked || programNoChange;
+      });
+    }
+
+    const claimsPanel = document.getElementById('claims');
+    if (claimsPanel) {
+      claimsPanel.querySelectorAll('input, select, textarea').forEach(control => {
+        control.disabled = globalLocked;
+      });
+    }
+
+    updateActionTabs();
+  }
+
+  function handleEntityActionChange(entity) {
+    if (isRendering) return;
+
+    const action = entity === 'provider'
+      ? getControl('providerAction')
+      : getControl('programAction');
+
+    if (action === 'No change') {
+      if (entity === 'provider') {
+        syncProviderControlsToCanonical();
+      } else {
+        syncProgramControlsToCanonical();
+      }
+    }
+
+    applyEntityActionState(false);
+    markDirty();
   }
 
   function suggestAgeBands(ageText) {
@@ -1534,11 +1667,11 @@
   }
 
   function setReviewLocked(locked) {
-    document.querySelectorAll(
-      '.action-strip select, .content input, .content select, .content textarea'
-    ).forEach(control => {
+    document.querySelectorAll('.action-strip select').forEach(control => {
       control.disabled = locked;
     });
+
+    applyEntityActionState(locked);
 
     const saveButton = document.getElementById('saveDraft');
     if (saveButton) saveButton.disabled = locked;
@@ -2362,7 +2495,7 @@
           Suggestion_Source: 'Rules',
           Human_Decision: 'Approved',
           Override_Reason: '',
-          Implementation_Version: '8D.2',
+          Implementation_Version: '8D.2b',
           Error_Detail: message
         }]
       ]);
@@ -2607,7 +2740,7 @@
           Suggestion_Source: displayValue(providerDraft.suggestion_source) || 'Rules',
           Human_Decision: 'Approved',
           Override_Reason: '',
-          Implementation_Version: '8D.2',
+          Implementation_Version: '8D.2b',
           Error_Detail: ''
         }]);
       }
@@ -2632,7 +2765,7 @@
           Suggestion_Source: displayValue(programDraft.suggestion_source) || 'Rules',
           Human_Decision: 'Approved',
           Override_Reason: '',
-          Implementation_Version: '8D.2',
+          Implementation_Version: '8D.2b',
           Error_Detail: ''
         }]);
       }
@@ -2984,6 +3117,16 @@
 
     setControl('draftReviewerNotes', programDraft.reviewer_notes || '');
 
+    // A No change decision must visually and operationally preserve the current KB.
+    // Reset any stale/submitted Suggested / Final values to canonical before unlocking.
+    if (getControl('providerAction') === 'No change') {
+      syncProviderControlsToCanonical();
+    }
+    if (getControl('programAction') === 'No change') {
+      syncProgramControlsToCanonical();
+    }
+    applyEntityActionState(boolValue(record.Promotion_Approved));
+
     isDirty = false;
     const persisted = persistedPromotionMessage(record);
     if (promotionRecovery.safeProviderResume && promotionRecovery.priorProgramFailure) {
@@ -3009,8 +3152,12 @@
   }
 
   function collectProviderDraft() {
+    if (getControl('providerAction') === 'No change') {
+      syncProviderControlsToCanonical();
+    }
+
     return {
-      version: '8D.2',
+      version: '8D.2b',
       suggestion_source: 'Rules',
       action: getControl('providerAction'),
       baseline: buildBaseline(
@@ -3031,8 +3178,12 @@
   }
 
   function collectProgramDraft() {
+    if (getControl('programAction') === 'No change') {
+      syncProgramControlsToCanonical();
+    }
+
     return {
-      version: '8D.2',
+      version: '8D.2b',
       suggestion_source: 'Rules',
       action: getControl('programAction'),
       baseline: buildBaseline(
@@ -3142,7 +3293,15 @@
     });
   });
 
+  document.getElementById('providerAction').addEventListener('change', function() {
+    handleEntityActionChange('provider');
+  });
+  document.getElementById('programAction').addEventListener('change', function() {
+    handleEntityActionChange('program');
+  });
+
   document.querySelectorAll('input, select, textarea').forEach(element => {
+    if (element.id === 'providerAction' || element.id === 'programAction') return;
     element.addEventListener('change', markDirty);
     element.addEventListener('input', markDirty);
   });
