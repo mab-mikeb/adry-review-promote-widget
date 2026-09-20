@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Project ADry Resource Review & Promote</title>
+  <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 18px;
+      font-family: Arial, Helvetica, sans-serif;
+      background: #f7f7f7;
+      color: #222;
+    }
+    .shell {
+      max-width: 1200px;
+      margin: 0 auto;
+      background: #fff;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .header {
+      padding: 18px 22px;
+      border-bottom: 1px solid #ddd;
+    }
+    .header h1 { margin: 0 0 4px; font-size: 20px; }
+    .header p { margin: 0; color: #666; font-size: 13px; }
+    .summary {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      padding: 12px 22px;
+      border-bottom: 1px solid #ddd;
+      background: #fafafa;
+    }
+    .badge {
+      border: 1px solid #ccc;
+      border-radius: 14px;
+      padding: 4px 10px;
+      font-size: 12px;
+      background: #fff;
+    }
+    .action-strip {
+      padding: 14px 22px;
+      border-bottom: 1px solid #ddd;
+    }
+    .action-strip label {
+      display: block;
+      font-size: 12px;
+      font-weight: 700;
+      margin-bottom: 5px;
+    }
+    select, input, textarea {
+      width: 100%;
+      border: 1px solid #bbb;
+      border-radius: 5px;
+      padding: 8px 9px;
+      font: inherit;
+      background: #fff;
+    }
+    textarea { min-height: 74px; resize: vertical; }
+    .content { padding: 22px; }
+    .notice {
+      padding: 12px 14px;
+      margin-bottom: 18px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      background: #fafafa;
+      font-size: 13px;
+      line-height: 1.45;
+    }
+    .review-table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+      border: 1px solid #ddd;
+    }
+    .review-table th,
+    .review-table td {
+      padding: 10px 12px;
+      border-bottom: 1px solid #e7e7e7;
+      border-right: 1px solid #eee;
+      vertical-align: top;
+      text-align: left;
+      word-break: break-word;
+      font-size: 13px;
+    }
+    .review-table th {
+      background: #f5f5f5;
+      font-weight: 700;
+    }
+    .review-table th:nth-child(1) { width: 21%; }
+    .review-table th:nth-child(2) { width: 20%; }
+    .review-table th:nth-child(3) { width: 20%; }
+    .review-table th:nth-child(4) { width: 25%; }
+    .review-table th:nth-child(5) { width: 14%; }
+    .review-table td:nth-child(1) {
+      white-space: nowrap;
+      word-break: normal;
+      font-size: 12px;
+    }
+    .muted { color: #777; }
+    .empty { color: #888; font-style: italic; }
+    .rule-badge {
+      display: inline-block;
+      border: 1px solid #c7c7c7;
+      border-radius: 12px;
+      padding: 2px 7px;
+      font-size: 11px;
+      margin-bottom: 4px;
+      background: #fff;
+    }
+    .save-bar {
+      position: sticky;
+      bottom: 0;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 22px;
+      border-top: 1px solid #ccc;
+      background: #fff;
+      z-index: 5;
+    }
+    .save-button {
+      border: 0;
+      border-radius: 6px;
+      padding: 10px 16px;
+      font-weight: 700;
+      cursor: pointer;
+      background: #222;
+      color: #fff;
+    }
+    .save-button:disabled { opacity: .5; cursor: default; }
+    .save-status { font-size: 13px; color: #666; }
+    .save-status.error { color: #9b1c1c; }
+    .save-status.success { color: #246b2d; }
+    .waiting {
+      padding: 50px 20px;
+      text-align: center;
+      color: #777;
+    }
+    .no-change .review-table { opacity: .72; }
+    @media (max-width: 760px) {
+      body { padding: 8px; }
+      .review-table, .review-table thead, .review-table tbody,
+      .review-table th, .review-table td, .review-table tr { display: block; }
+      .review-table thead { position: absolute; left: -9999px; }
+      .review-table tr { border-bottom: 2px solid #ddd; }
+      .review-table td { border-right: none; white-space: normal !important; font-size: 13px !important; }
+      .review-table td::before {
+        display: block;
+        font-weight: 700;
+        color: #555;
+        margin-bottom: 3px;
+      }
+      .review-table td:nth-child(1)::before { content: "Canonical field"; }
+      .review-table td:nth-child(2)::before { content: "Current KB"; }
+      .review-table td:nth-child(3)::before { content: "Submitted"; }
+      .review-table td:nth-child(4)::before { content: "Suggested / Final"; }
+      .review-table td:nth-child(5)::before { content: "Rule"; }
+    }
+  </style>
+</head>
+<body>
+<div class="shell">
+  <div class="header">
+    <h1>Project ADry — Resource Review & Promote</h1>
+    <p>Phase 9A.1 · Canonical comparison + editable Resource review draft</p>
+  </div>
+
+  <div id="waiting" class="waiting">Select a resource submission in Grist.</div>
+
+  <div id="workspace" style="display:none;">
+    <div class="summary">
+      <span class="badge" id="submissionBadge"></span>
+      <span class="badge" id="statusBadge"></span>
+      <span class="badge" id="resourceMatchBadge"></span>
+    </div>
+
+    <div class="action-strip">
+      <label for="resourceAction">Resource action</label>
+      <select id="resourceAction">
+        <option value="">Select action</option>
+        <option>Create</option>
+        <option>Update</option>
+        <option>No change</option>
+        <option>Verification required</option>
+        <option>Reject</option>
+      </select>
+    </div>
+
+    <div id="reviewContent" class="content">
+      <div id="matchNotice" class="notice"></div>
+      <div class="notice">
+        <strong>Phase 9A.1:</strong> review and edit Suggested / Final values, then save the draft.
+        This phase writes only to <strong>Resource_Submissions.Resource_Review_Draft</strong> and
+        <strong>Resource_Action</strong>. It does not create or update canonical Resources.
+      </div>
+
+      <table class="review-table">
+        <thead>
+          <tr>
+            <th>Canonical field</th>
+            <th>Current KB</th>
+            <th>Submitted</th>
+            <th>Suggested / Final</th>
+            <th>Rule</th>
+          </tr>
+        </thead>
+        <tbody id="resourceRows"></tbody>
+      </table>
+    </div>
+
+    <div class="save-bar">
+      <button id="saveDraft" class="save-button">Save Resource Review Draft</button>
+      <div id="saveStatus" class="save-status"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+  grist.ready({ requiredAccess: 'full' });
+
+  let currentRecord = null;
+  let currentResource = null;
+  let isRendering = false;
+  let isDirty = false;
+
+  const FIELD_DEFS = [
+    { key: 'Resource_Name', aliases: ['Resource_Name'], type: 'text', rule: 'Submission if supplied; otherwise preserve current.' },
+    { key: 'Provider', aliases: ['Provider_Name', 'Provider', 'Existing_Provider'], type: 'text', rule: 'Preserve current Provider for matched resources; reviewer confirms for new resources.' },
+    { key: 'Resource_Type', aliases: ['Resource_Type'], type: 'text', rule: 'Submission if supplied; otherwise preserve current.' },
+    { key: 'Resource_Category', aliases: ['Resource_Category'], type: 'text', rule: 'Reviewer-normalized canonical category.' },
+    { key: 'Resource_Summary', aliases: ['Resource_Summary', 'Resource_Description', 'Description'], type: 'textarea', rule: 'Description maps to canonical summary when supplied.' },
+    { key: 'Intended_User', aliases: ['Intended_User'], type: 'text', rule: 'Choice-list draft; preserve current unless supplied.' },
+    { key: 'Support_Need', aliases: ['Support_Need'], type: 'text', rule: 'Choice-list draft; preserve current unless supplied.' },
+    { key: 'Delivery_Form', aliases: ['Delivery_Form'], type: 'text', rule: 'Submission if supplied; otherwise preserve current.' },
+    { key: 'Key_Features', aliases: ['Key_Features'], type: 'textarea', rule: 'Submission if supplied; otherwise preserve current.' },
+    { key: 'Geographic_Availability', aliases: ['Geographic_Availability', 'Service_Area'], type: 'text', rule: 'Submission if supplied; otherwise preserve current.' },
+    { key: 'Connectivity_Required', aliases: ['Connectivity_Required'], type: 'text', rule: 'Submission if supplied; otherwise preserve current.' },
+    { key: 'App_or_Platform', aliases: ['App_or_Platform'], type: 'text', rule: 'Submission if supplied; otherwise preserve current.' },
+    { key: 'Purchase_Model', aliases: ['Purchase_Model'], type: 'text', rule: 'Submission if supplied; otherwise preserve current.' },
+    { key: 'Published_Cost', aliases: ['Published_Cost', 'Cost_Information'], type: 'text', rule: 'Cost information maps to published cost when appropriate.' },
+    { key: 'Funding_Information', aliases: ['Funding_Information'], type: 'textarea', rule: 'Reviewer confirms funding wording before later promotion.' },
+    { key: 'Eligibility_or_Requirements', aliases: ['Eligibility_or_Requirements', 'Eligibility_Information'], type: 'textarea', rule: 'Reviewer confirms eligibility / requirements wording.' },
+    { key: 'Privacy_Safety_Information', aliases: ['Privacy_Safety_Information'], type: 'textarea', rule: 'Reviewer-confirmed privacy / safety information.' },
+    { key: 'Website', aliases: ['Website', 'Resource_URL'], type: 'text', rule: 'Submission URL if supplied; otherwise preserve current.' },
+    { key: 'Resource_Status', aliases: ['Resource_Status'], type: 'text', rule: 'Preserve current for matched resource unless reviewer changes it.' },
+    { key: 'Information_Source', aliases: ['Information_Source'], type: 'text', rule: 'Existing: preserve current by default. New: Provider submitted unless changed.' },
+    { key: 'Confidence_Status', aliases: ['Confidence_Status'], type: 'text', rule: 'Never downgrade an existing confidence level automatically.' },
+    { key: 'Last_Checked', aliases: ['Last_Checked'], type: 'text', rule: 'Preserve current unless reviewer deliberately changes it.' },
+    { key: 'Notes', aliases: ['Notes', 'Additional_Information'], type: 'textarea', rule: 'Additional context; reviewer decides whether it belongs in canonical notes.' }
+  ];
+
+  function displayValue(value) {
+    if (value === null || value === undefined) return '';
+    if (Array.isArray(value)) {
+      if (value[0] === 'L') return value.slice(1).join(', ');
+      if (value[0] === 'R') return String(value[value.length - 1] ?? '');
+      return value.join(', ');
+    }
+    return String(value);
+  }
+
+  function hasValue(value) {
+    return displayValue(value).trim().length > 0;
+  }
+
+  function refRowId(value) {
+    if (typeof value === 'number') return value || null;
+    if (typeof value === 'string' && /^\s*\d+\s*$/.test(value)) return Number(value.trim()) || null;
+    if (Array.isArray(value) && value[0] === 'R') return Number(value[2]) || null;
+    return null;
+  }
+
+  function tableToRows(data) {
+    if (!data || typeof data !== 'object') return [];
+    const ids = Array.isArray(data.id) ? data.id : [];
+    const columns = Object.keys(data).filter(k => Array.isArray(data[k]) && k !== 'id');
+    return ids.map((id, index) => {
+      const row = { id };
+      columns.forEach(col => row[col] = data[col][index]);
+      return row;
+    });
+  }
+
+  function firstField(record, names) {
+    if (!record) return '';
+    for (const name of names) {
+      if (Object.prototype.hasOwnProperty.call(record, name) && hasValue(record[name])) {
+        return record[name];
+      }
+    }
+    return '';
+  }
+
+  function parseDraft(value) {
+    const raw = displayValue(value);
+    if (!raw) return null;
+    try {
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === 'object' ? parsed : null;
+    } catch (err) {
+      return null;
+    }
+  }
+
+  function setSaveStatus(message, kind) {
+    const el = document.getElementById('saveStatus');
+    el.textContent = message;
+    el.className = 'save-status' + (kind ? ' ' + kind : '');
+  }
+
+  function setControl(id, value) {
+    const el = document.getElementById(id);
+    if (el) el.value = displayValue(value);
+  }
+
+  function getControl(id) {
+    const el = document.getElementById(id);
+    return el ? el.value : '';
+  }
+
+  function put(id, value, emptyText) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const text = displayValue(value);
+    if (text) {
+      el.textContent = text;
+      el.classList.remove('empty');
+    } else {
+      el.textContent = emptyText || 'Not provided';
+      el.classList.add('empty');
+    }
+  }
+
+  function currentProviderLabel(resource, providersById) {
+    if (!resource) return '';
+    const providerId = refRowId(resource.Provider);
+    if (!providerId) return displayValue(resource.Provider);
+    const provider = providersById.get(providerId);
+    return provider ? displayValue(provider.Provider_Name) : String(providerId);
+  }
+
+  function normalizeCanonicalValue(field, value, providersById) {
+    if (field === 'Provider') {
+      const id = refRowId(value);
+      if (!id) return displayValue(value);
+      const provider = providersById.get(id);
+      return provider ? displayValue(provider.Provider_Name) : String(id);
+    }
+    return displayValue(value);
+  }
+
+  function buildRows(record, resource, providersById, draftFields) {
+    const tbody = document.getElementById('resourceRows');
+    tbody.innerHTML = '';
+
+    FIELD_DEFS.forEach(def => {
+      const tr = document.createElement('tr');
+      const current = resource
+        ? normalizeCanonicalValue(def.key, resource[def.key], providersById)
+        : '';
+      const submitted = def.key === 'Provider'
+        ? (firstField(record, ['Provider_Name']) || firstField(record, ['Provider', 'Existing_Provider']))
+        : firstField(record, def.aliases);
+      const hasDraft = draftFields && Object.prototype.hasOwnProperty.call(draftFields, def.key);
+      const suggested = hasDraft
+        ? draftFields[def.key]
+        : (hasValue(submitted) ? submitted : current);
+
+      const fieldCell = document.createElement('td');
+      fieldCell.textContent = def.key;
+
+      const currentCell = document.createElement('td');
+      if (hasValue(current)) currentCell.textContent = displayValue(current);
+      else {
+        currentCell.textContent = resource ? 'No canonical value' : 'No canonical record';
+        currentCell.className = 'empty';
+      }
+
+      const submittedCell = document.createElement('td');
+      if (hasValue(submitted)) submittedCell.textContent = displayValue(submitted);
+      else {
+        submittedCell.textContent = 'Not provided';
+        submittedCell.className = 'empty';
+      }
+
+      const finalCell = document.createElement('td');
+      const control = document.createElement(def.type === 'textarea' ? 'textarea' : 'input');
+      if (def.type !== 'textarea') control.type = 'text';
+      control.id = 'r_final_' + def.key;
+      control.value = displayValue(suggested);
+      control.addEventListener('input', markDirty);
+      control.addEventListener('change', markDirty);
+      finalCell.appendChild(control);
+
+      const ruleCell = document.createElement('td');
+      const badge = document.createElement('span');
+      badge.className = 'rule-badge';
+      badge.textContent = 'Review';
+      const note = document.createElement('span');
+      note.className = 'muted';
+      note.textContent = def.rule;
+      ruleCell.appendChild(badge);
+      ruleCell.appendChild(document.createElement('br'));
+      ruleCell.appendChild(note);
+
+      tr.appendChild(fieldCell);
+      tr.appendChild(currentCell);
+      tr.appendChild(submittedCell);
+      tr.appendChild(finalCell);
+      tr.appendChild(ruleCell);
+      tbody.appendChild(tr);
+    });
+  }
+
+  function syncNoChangeToCanonical(providersById) {
+    if (!currentResource) return;
+    FIELD_DEFS.forEach(def => {
+      const value = normalizeCanonicalValue(def.key, currentResource[def.key], providersById);
+      setControl('r_final_' + def.key, value);
+    });
+  }
+
+  function setReviewLocked(locked, noChange) {
+    document.getElementById('resourceAction').disabled = locked;
+    document.querySelectorAll('#resourceRows input, #resourceRows textarea').forEach(el => {
+      el.disabled = locked || noChange;
+    });
+    document.getElementById('reviewContent').classList.toggle('no-change', !!noChange);
+    document.getElementById('saveDraft').disabled = locked;
+  }
+
+  function markDirty() {
+    if (isRendering) return;
+    isDirty = true;
+    setSaveStatus('Unsaved changes. Save before selecting another submission.');
+  }
+
+  async function fetchContext(record) {
+    const [subData, resourceData, providerData] = await Promise.all([
+      grist.docApi.fetchTable('Resource_Submissions'),
+      grist.docApi.fetchTable('Resources'),
+      grist.docApi.fetchTable('Providers')
+    ]);
+
+    const submissions = tableToRows(subData);
+    const resources = tableToRows(resourceData);
+    const providers = tableToRows(providerData);
+    const raw = submissions.find(row => row.id === record.id) || record;
+
+    const resourceId = refRowId(raw.Existing_Resource);
+    return {
+      raw,
+      resource: resourceId ? (resources.find(row => row.id === resourceId) || null) : null,
+      providersById: new Map(providers.map(row => [row.id, row]))
+    };
+  }
+
+  async function render(record) {
+    currentRecord = record || null;
+
+    if (!record) {
+      document.getElementById('waiting').style.display = 'block';
+      document.getElementById('workspace').style.display = 'none';
+      return;
+    }
+
+    isRendering = true;
+    document.getElementById('waiting').style.display = 'none';
+    document.getElementById('workspace').style.display = 'block';
+
+    const ctx = await fetchContext(record);
+    currentRecord = ctx.raw;
+    currentResource = ctx.resource;
+
+    const draft = parseDraft(currentRecord.Resource_Review_Draft) || {};
+    const draftFields = draft.fields || {};
+
+    put('submissionBadge', 'Submission: ' + (displayValue(currentRecord.Submission_ID) || 'Unknown'));
+    put('statusBadge', 'Status: ' + (displayValue(currentRecord.Review_Status) || 'Not set'));
+    put('resourceMatchBadge', currentResource ? 'Resource: matched' : 'Resource: new');
+
+    const action = draft.action ||
+      displayValue(currentRecord.Resource_Action) ||
+      (currentResource ? '' : 'Create');
+    setControl('resourceAction', action);
+
+    document.getElementById('matchNotice').textContent = currentResource
+      ? 'An existing Resource is matched. Current KB values are shown beside the submission so the reviewer can focus on differences.'
+      : 'No existing Resource is matched. The default action is Create; canonical promotion will be added after this review-draft phase passes QA.';
+
+    buildRows(currentRecord, currentResource, ctx.providersById, draftFields);
+
+    if (action === 'No change' && currentResource) {
+      syncNoChangeToCanonical(ctx.providersById);
+    }
+
+    const approved = currentRecord.Promotion_Approved === true || currentRecord.Promotion_Approved === 1;
+    setReviewLocked(approved, action === 'No change');
+
+    isDirty = false;
+    setSaveStatus(
+      draft.version ? 'Saved Resource review draft loaded.' : 'No saved Resource review draft yet.'
+    );
+    isRendering = false;
+  }
+
+  function collectDraft() {
+    const fields = {};
+    FIELD_DEFS.forEach(def => {
+      fields[def.key] = getControl('r_final_' + def.key);
+    });
+    return {
+      version: '9A.1',
+      suggestion_source: 'Rules',
+      action: getControl('resourceAction'),
+      fields
+    };
+  }
+
+  async function saveDraft() {
+    if (!currentRecord || !currentRecord.id) {
+      setSaveStatus('Cannot save: no selected Resource_Submissions row.', 'error');
+      return;
+    }
+
+    if (currentRecord.Promotion_Approved === true || currentRecord.Promotion_Approved === 1) {
+      setSaveStatus('This Resource review is already approved and locked.', 'error');
+      return;
+    }
+
+    const action = getControl('resourceAction');
+    if (!action) {
+      setSaveStatus('Select Resource Action before saving.', 'error');
+      return;
+    }
+
+    if (action === 'No change' && !currentResource) {
+      setSaveStatus('No change requires an existing matched Resource.', 'error');
+      return;
+    }
+
+    const button = document.getElementById('saveDraft');
+    button.disabled = true;
+    setSaveStatus('Saving Resource review draft...');
+
+    try {
+      const ctx = await fetchContext(currentRecord);
+      currentResource = ctx.resource;
+      if (action === 'No change' && currentResource) {
+        syncNoChangeToCanonical(ctx.providersById);
+      }
+
+      const draft = collectDraft();
+      const updates = {
+        Resource_Action: action,
+        Resource_Review_Draft: JSON.stringify(draft)
+      };
+
+      const status = displayValue(currentRecord.Review_Status);
+      if (['New', 'Ready to Promote', 'Verification Required'].includes(status)) {
+        updates.Review_Status = 'In Review';
+      }
+
+      await grist.docApi.applyUserActions([
+        ['UpdateRecord', 'Resource_Submissions', currentRecord.id, updates]
+      ]);
+
+      Object.assign(currentRecord, updates);
+      isDirty = false;
+      if (updates.Review_Status) put('statusBadge', 'Status: ' + updates.Review_Status);
+      setSaveStatus('Resource review draft saved to Resource_Submissions.', 'success');
+    } catch (err) {
+      console.error(err);
+      setSaveStatus('Save failed: ' + (err && err.message ? err.message : String(err)), 'error');
+    } finally {
+      button.disabled = false;
+    }
+  }
+
+  grist.onRecord(record => {
+    render(record).catch(err => {
+      console.error(err);
+      setSaveStatus('Widget render failed: ' + (err && err.message ? err.message : String(err)), 'error');
+    });
+  });
+
+  document.getElementById('resourceAction').addEventListener('change', async function() {
+    if (isRendering) return;
+    try {
+      const ctx = await fetchContext(currentRecord);
+      currentResource = ctx.resource;
+      if (this.value === 'No change' && currentResource) {
+        isRendering = true;
+        syncNoChangeToCanonical(ctx.providersById);
+        isRendering = false;
+      }
+      setReviewLocked(false, this.value === 'No change');
+      markDirty();
+    } catch (err) {
+      setSaveStatus('Could not apply Resource action state: ' + (err && err.message ? err.message : String(err)), 'error');
+    }
+  });
+
+  document.getElementById('saveDraft').addEventListener('click', saveDraft);
+</script>
+</body>
+</html>
