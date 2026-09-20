@@ -448,7 +448,7 @@
 <div class="shell">
   <div class="header">
     <h1>Project ADry — Review & Promote</h1>
-    <p>Phase 8D.3 · No-change, reject, and verification dispositions</p>
+    <p>Phase 8D.4 · Provider/Program final regression candidate</p>
   </div>
 
   <div id="waiting" class="waiting">
@@ -902,7 +902,7 @@
       <div id="approvalStatus" class="approval-status"></div>
       <div id="promotionStatus" class="approval-status"></div>
       <div class="approval-note">
-        Phase 8D.3 adds explicit non-promotion dispositions. <strong>No change + No change</strong> can be completed without canonical writes, <strong>Reject</strong> finalizes the submission without canonical writes, and any entity-level <strong>Verification required</strong> routes the submission to Verification Required. These dispositions do not create KB_Promotion_Log rows because no canonical mutation occurs.
+        Phase 8D.4 is the Provider/Program regression candidate. It retains create, update, no-change, reject, verification, approval/reopen, duplicate protection, recovery, and audit behavior while polishing completed-disposition messaging for final QA.
       </div>
     </div>
 
@@ -1765,11 +1765,21 @@
       !!parseDraft(currentRecord.Program_Review_Draft) &&
       !isDirty;
 
-    if (disposition === 'verification' && !approved && status !== 'Completed') {
+    if (status === 'Completed') {
+      if (disposition === 'reject') {
+        headline.textContent = 'Rejected review completed — no canonical changes were made.';
+      } else if (disposition === 'nochange') {
+        headline.textContent = 'No-change review completed — no canonical changes were required.';
+      } else {
+        headline.textContent = 'Review completed.';
+      }
+    } else if (status === 'Verification Required') {
+      headline.textContent = 'Review routed to Verification Required.';
+    } else if (disposition === 'verification' && !approved) {
       headline.textContent = 'Review can be routed to Verification Required.';
-    } else if (disposition === 'reject' && !approved && status !== 'Completed') {
+    } else if (disposition === 'reject' && !approved) {
       headline.textContent = 'Review can be finalized as rejected.';
-    } else if (disposition === 'nochange' && !approved && status !== 'Completed') {
+    } else if (disposition === 'nochange' && !approved) {
       headline.textContent = 'No canonical changes are required.';
     } else if (approved) {
       headline.textContent = 'Human approval recorded.';
@@ -1859,6 +1869,12 @@
 
     if (promotionInProgress) {
       promotionStatus.textContent = 'Promotion is running. Do not close or refresh the widget.';
+    } else if (status === 'Completed' && disposition === 'reject') {
+      promotionStatus.textContent = 'Rejection is final. No canonical Provider/Program records were changed and no promotion-log row was created for this disposition.';
+    } else if (status === 'Completed' && disposition === 'nochange') {
+      promotionStatus.textContent = 'No-change review is complete. Canonical Provider/Program records were left unchanged and no promotion-log row was created.';
+    } else if (status === 'Verification Required') {
+      promotionStatus.textContent = 'This review is waiting on verification. No canonical Provider/Program records have been changed.';
     } else if (disposition === 'verification') {
       promotionStatus.textContent = 'Entity-level verification is required. No canonical records will be changed; finalize this review to route it to Verification Required.';
     } else if (disposition === 'reject') {
@@ -3369,7 +3385,7 @@
     }
 
     return {
-      version: '8D.3',
+      version: '8D.4',
       suggestion_source: 'Rules',
       action: getControl('providerAction'),
       baseline: buildBaseline(
@@ -3395,7 +3411,7 @@
     }
 
     return {
-      version: '8D.3',
+      version: '8D.4',
       suggestion_source: 'Rules',
       action: getControl('programAction'),
       baseline: buildBaseline(
