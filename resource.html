@@ -243,7 +243,7 @@
 <div class="shell">
   <div class="header">
     <h1>Project ADry — Resource Review & Promote</h1>
-    <p>Phase 9A.3a · Resource Review Status &amp; Completion UX</p>
+    <p>Phase 9A.4 · New Resource Creation &amp; Audit</p>
   </div>
 
   <div id="waiting" class="waiting">Select a resource submission in Grist.</div>
@@ -270,8 +270,8 @@
     <div id="reviewContent" class="content">
       <div id="matchNotice" class="notice"></div>
       <div class="notice">
-        <strong>Phase 9A.3a:</strong> approved matched Resource updates can now be promoted to the canonical Resources table.
-        Only approved changed fields are written, with before/after values recorded in KB_Promotion_Log. Create and non-promotion dispositions remain disabled until later phases.
+        <strong>Phase 9A.4:</strong> approved new Resources can be created, and approved matched Resources can be updated.
+        Only approved changed fields are written, with before/after values recorded in KB_Promotion_Log. No change, rejection, and verification dispositions remain unavailable for finalization.
       </div>
 
       <table class="review-table">
@@ -334,6 +334,8 @@
   let isDirty = false;
   let promotionInProgress = false;
   let detailsRequest = 0;
+  let pendingResourceSelection = null;
+  let creatingResource = false;
 
   const FIELD_DEFS = [
     { key: 'Resource_Name', aliases: ['Resource_Name'], type: 'text', rule: 'Submission if supplied; otherwise preserve current.' },
@@ -716,10 +718,10 @@
     }
 
     if (action === 'Create') {
-      add(hasValue(getControl('r_final_Resource_Name')) ? 'ok' : 'block', 'New Resource has a Resource Name.');
-      add(hasValue(getControl('r_final_Resource_Type')) ? 'ok' : 'block', 'New Resource has a Resource Type.');
-      add(hasValue(getControl('r_final_Resource_Summary')) ? 'ok' : 'block', 'New Resource has a Resource Summary.');
-      add(hasValue(getControl('r_final_Website')) ? 'ok' : 'block', 'New Resource has a Website.');
+      const fields = Object.fromEntries(FIELD_DEFS.map(def => [def.key, getControl('r_final_' + def.key)]));
+      const issues = createIssues(fields, window.__resourceProvidersById || new Map());
+      issues.forEach(message => add('block', message));
+      if (!issues.length) add('ok', 'New Resource details and Provider pass validation.');
     }
 
     if (action === 'Update') {
@@ -809,7 +811,7 @@
 
     document.getElementById('matchNotice').textContent = currentResource
       ? 'An existing Resource is matched. Current KB values are shown beside the submission so the reviewer can focus on differences.'
-      : 'No existing Resource is matched. The default action is Create; canonical promotion will be added after this review-draft phase passes QA.';
+      : 'No existing Resource is matched. Review the values and select an existing Provider before approving creation.';
 
     buildRows(currentRecord, currentResource, ctx.providersById, draftFields);
 
@@ -847,8 +849,8 @@
       fields[def.key] = getControl('r_final_' + def.key);
     });
     return {
-      // Draft format remains 9A.3; 9A.3a changes presentation only.
-      version: '9A.3',
+      // 9A.4 creation drafts require a fresh review and approval.
+      version: '9A.4',
       suggestion_source: 'Rules',
       action: getControl('resourceAction'),
       baseline: buildResourceBaseline(
@@ -878,7 +880,8 @@
     const buttons = ['markReady', 'recordApproval', 'reopenReview', 'promoteApproved'].map(el);
     const completed = currentRecord && displayValue(currentRecord.Review_Status) === 'Completed';
     const approved = currentRecord && boolValue(currentRecord.Promotion_Approved);
-    const failed = currentRecord && displayValue(currentRecord.Promotion_Result) === 'Failed';
+    const partial = currentRecord && displayValue(currentRecord.Promotion_Result) === 'Partial';
+    const failed = currentRecord && ['Failed', 'Partial'].includes(displayValue(currentRecord.Promotion_Result));
     const successful = completed && displayValue(currentRecord.Promotion_Result) === 'Success';
     const status = currentRecord ? displayValue(currentRecord.Review_Status) : '';
     const action = getControl('resourceAction');
@@ -891,7 +894,7 @@
 
     buttons.forEach(button => { button.disabled = true; button.hidden = !!completed; });
     el('saveDraft').hidden = !!completed;
-    el('completedActions').hidden = !completed;
+    el('completedActions').hidden = !completed && !partial;
     el('viewResource').disabled = !currentResource;
     document.querySelector('.approval-note').hidden = !!completed;
     list.replaceChildren();
@@ -900,7 +903,7 @@
 
     let tone = 'info', title = 'Select a Resource submission.', next = '';
     if (currentRecord) {
-      setReviewLocked(!!completed || !!approved || promotionInProgress, action === 'No change');
+      setReviewLocked(!!completed || !!approved || !!partial || promotionInProgress, action === 'No change');
       const when = formatApprovalTime(currentRecord.Approved_On);
       el('approvalStatus').textContent = approved
         ? 'Approved by ' + (displayValue(currentRecord.Approved_By) || 'recorded approver') +
@@ -909,7 +912,7 @@
 
       // Completion is a historical outcome, not a fresh readiness check.
       if (successful) {
-        tone = 'success'; title = '✓ Update completed successfully';
+        tone = 'success'; title = currentRecord.Resource_Action === 'Create' ? '✓ Resource created successfully' : '✓ Update completed successfully';
         next = 'The approved changes were applied to Resource ' +
           (displayValue(currentResource && currentResource.Resource_ID) || '(see audit record)') +
           ' and recorded in the audit log. No further action is needed for this submission.';
@@ -929,9 +932,10 @@
         });
         el('markReady').disabled = promotionInProgress || approved || !result.ready || status === 'Ready to Promote' || isDirty;
         el('recordApproval').disabled = promotionInProgress || approved || !result.ready || status !== 'Ready to Promote' || isDirty;
-        el('reopenReview').disabled = promotionInProgress || !approved || status !== 'Ready to Promote';
+        el('reopenReview').disabled = promotionInProgress || partial || !approved || status !== 'Ready to Promote';
         el('promoteApproved').disabled = promotionInProgress || failed || stale || !approved ||
-          status !== 'Ready to Promote' || isDirty || action !== 'Update' || !currentResource || !hasBaseline || !result.ready;
+          status !== 'Ready to Promote' || isDirty || !result.ready ||
+          (action === 'Create' ? !!currentResource || !draft || draft.version !== '9A.4' : action !== 'Update' || !currentResource || !hasBaseline);
 
         if (promotionInProgress) {
           title = 'ℹ Checking and applying the approved update';
@@ -942,8 +946,8 @@
             'Compare the latest knowledge-base values, save your review, and approve it again before promotion.';
         } else if (failed) {
           tone = 'error'; title = '✕ Action required — promotion did not finish';
-          next = 'Changes may already have been applied. Check the Resource and KB_Promotion_Log before retrying. After resolving the issue, reopen the review, save, and approve again.';
-        } else if (approved && !hasBaseline) {
+          next = partial ? 'A Resource was created, but final verification is pending. Inspect View Resource and View audit record. Do not create again; resolve this partial result first.' : 'Changes may already have been applied. Check the Resource and KB_Promotion_Log before retrying. After resolving the issue, reopen the review, save, and approve again.';
+        } else if (approved && (action === 'Create' ? !draft || draft.version !== '9A.4' : !hasBaseline)) {
           tone = 'warning'; title = '⚠ Review needs refreshing';
           next = 'This approval uses an older draft. Reopen the review, save it, and approve again to enable promotion.';
         } else if (isDirty || !draft) {
@@ -953,9 +957,9 @@
           title = 'ℹ No changes needed';
           next = 'The reviewed values match the knowledge base. Nothing needs updating. Leave this submission unpromoted; closing without changes is not available yet.';
           list.replaceChildren();
-        } else if (action !== 'Update') {
+        } else if (!['Update', 'Create'].includes(action)) {
           title = 'ℹ This action cannot be completed here yet';
-          next = 'This version applies updates to existing Resources only. You can save this review for later; do not change the decision just to enable promotion.';
+          next = 'This version creates Resources and updates existing Resources. You can save this review for later; do not change the decision just to enable promotion.';
         } else if (!result.ready) {
           tone = 'warning'; title = '⚠ Review needed';
           next = 'Resolve the items below, then save your review.';
@@ -979,7 +983,7 @@
   }
 
   async function showCompletedDetails(kind) {
-    if (!currentRecord || displayValue(currentRecord.Review_Status) !== 'Completed') return;
+    if (!currentRecord || (displayValue(currentRecord.Review_Status) !== 'Completed' && currentRecord.Promotion_Result !== 'Partial')) return;
     const submissionId = currentRecord.id;
     const sourceId = displayValue(currentRecord.Submission_ID);
     const resourceId = refRowId(currentRecord.Existing_Resource);
@@ -1083,6 +1087,10 @@
 
   async function reopenApprovedReview() {
     if (!currentRecord || !currentRecord.id) return;
+    if (currentRecord.Promotion_Result === 'Partial') {
+      setSaveStatus('Inspect the partial Resource creation and audit record before reopening.', 'error');
+      return;
+    }
 
     if (!boolValue(currentRecord.Promotion_Approved) ||
         displayValue(currentRecord.Review_Status) !== 'Ready to Promote') {
@@ -1125,7 +1133,183 @@
     }
   }
 
+  function createIssues(fields, providersById) {
+    const issues = [];
+    ['Resource_Name', 'Resource_Type', 'Resource_Summary', 'Website'].forEach(field => {
+      if (!hasValue(fields[field])) issues.push('Enter ' + field.replace(/_/g, ' ') + ', then save the review.');
+    });
+    try {
+      if (!resolveProviderRowId(fields.Provider, providersById)) issues.push('Enter an existing Provider name. Create the Provider separately first if needed.');
+    } catch (err) { issues.push(err.message); }
+    if (hasValue(fields.Website)) {
+      try { if (!['https:', 'http:'].includes(new URL(fields.Website).protocol)) throw new Error(); }
+      catch (_) { issues.push('Enter a complete http:// or https:// Website URL.'); }
+    }
+    if (hasValue(fields.Last_Checked)) {
+      try {
+        const seconds = dateCell(fields.Last_Checked);
+        if (new Date(seconds * 1000).toISOString().slice(0, 10) !== formatDateValue(fields.Last_Checked)) throw new Error();
+      } catch (_) { issues.push('Enter a valid Last Checked date, or leave it blank.'); }
+    }
+    return issues;
+  }
+
+  function findCreateDuplicate(fields, resources, providers) {
+    const normalize = value => displayValue(value).trim().toLowerCase().replace(/\s+/g, ' ');
+    const provider = resolveProviderRowId(fields.Provider, providers);
+    return resources.find(row => normalize(row.Resource_Name) === normalize(fields.Resource_Name) &&
+      refRowId(row.Provider) === provider);
+  }
+
+  function nextRowId(rows) {
+    return rows.reduce((max, row) => Math.max(max, Number(row.id) || 0), 0) + 1;
+  }
+
+  async function createContext(sourceId) {
+    const names = ['Resource_Submissions', 'Resources', 'Providers', 'KB_Promotion_Log', '_grist_Tables', '_grist_Tables_column'];
+    const data = await Promise.all(names.map(name => grist.docApi.fetchTable(name)));
+    const rows = data.map(tableToRows);
+    const source = rows[0].find(row => row.id === sourceId);
+    if (!source) throw new Error('The selected submission no longer exists.');
+    return { source, resources: rows[1], providers: new Map(rows[2].map(row => [row.id, row])), logs: rows[3], tables: rows[4], columns: rows[5] };
+  }
+
+  function approvedCreate(ctx) {
+    const source = ctx.source;
+    if (source.Review_Status !== 'Ready to Promote' || !boolValue(source.Promotion_Approved)) throw new Error('Save the review, mark it ready, and record human approval first.');
+    if (refRowId(source.Existing_Resource)) throw new Error('An existing Resource is linked. Creation is blocked to prevent a duplicate.');
+    if (['Success', 'Partial'].includes(source.Promotion_Result)) throw new Error('A previous creation may already exist. Check the Resource and audit log; do not create again.');
+    if (source.Resource_Action !== 'Create') throw new Error('Resource Action must be Create.');
+    if (!hasValue(source.Submission_ID)) throw new Error('Submission ID is required for audit traceability.');
+    if (!hasValue(source.Approved_By) || !hasValue(source.Approved_By_Email) || !hasValue(source.Approved_On)) throw new Error('Approval stamps are incomplete. Reopen and approve again.');
+    const draft = parseDraft(source.Resource_Review_Draft);
+    if (!draft || draft.version !== '9A.4' || draft.action !== 'Create' || !draft.fields) throw new Error('Reopen this review, save it under Phase 9A.4, and approve again.');
+    const issues = createIssues(draft.fields, ctx.providers);
+    if (issues.length) throw new Error(issues.join(' '));
+    const duplicate = findCreateDuplicate(draft.fields, ctx.resources, ctx.providers);
+    if (duplicate) throw new Error('A Resource with this name and Provider already exists: ' + (duplicate.Resource_ID || duplicate.id) + '. Match and review it instead of creating another.');
+    if (ctx.logs.some(row => row.Submission_Type === 'Resource Submission' && row.Source_Submission_ID === source.Submission_ID && ['Success', 'Partial'].includes(row.Result))) throw new Error('This submission has a successful or partial audit entry. Inspect it before continuing.');
+    return draft;
+  }
+
+  function createValues(ctx, draft) {
+    const table = ctx.tables.find(row => row.tableId === 'Resources');
+    if (!table) throw new Error('Resources schema could not be read.');
+    const columns = new Map(ctx.columns.filter(col => col.parentId === table.id).map(col => [col.colId, col]));
+    const idColumn = columns.get('Resource_ID');
+    if (!idColumn) throw new Error('Resource_ID column is missing.');
+    const values = {};
+    FIELD_DEFS.forEach(def => {
+      const col = columns.get(def.key);
+      const value = draft.fields[def.key];
+      if (!col || col.isFormula) {
+        if (hasValue(value)) throw new Error(def.key + ' is missing or formula-controlled; review the schema before creation.');
+        return;
+      }
+      values[def.key] = canonicalWriteValue(def.key, value, ctx.providers);
+    });
+    // Leave formula/trigger-generated IDs to Grist. Allocate only plain editable IDs.
+    if (!idColumn.isFormula && !hasValue(idColumn.formula)) {
+      const max = ctx.resources.reduce((n, row) => {
+        const match = /^RES-(\d+)$/i.exec(displayValue(row.Resource_ID).trim());
+        return match ? Math.max(n, Number(match[1])) : n;
+      }, 0);
+      values.Resource_ID = 'RES-' + String(max + 1).padStart(3, '0');
+    }
+    return values;
+  }
+
+  async function promoteNewResource() {
+    if (!currentRecord || promotionInProgress || isDirty) return;
+    const sourceId = currentRecord.id;
+    creatingResource = true;
+    promotionInProgress = true;
+    updateReadiness();
+    let attempted = false, committed = false, resourceRowId = null, logRowId = null;
+    try {
+      let ctx = await createContext(sourceId);
+      let draft = approvedCreate(ctx);
+      const approvedSnapshot = JSON.stringify([ctx.source.Resource_Review_Draft, ctx.source.Approved_By, ctx.source.Approved_By_Email, ctx.source.Approved_On]);
+      createValues(ctx, draft);
+      if (!window.confirm('Create this approved Resource?\n\n' + displayValue(draft.fields.Resource_Name) + '\nProvider: ' + displayValue(draft.fields.Provider) + '\n\nA new Resource and audit record will be created.')) return;
+      // Recheck after the confirmation dialog, including duplicates and approval changes.
+      ctx = await createContext(sourceId);
+      draft = approvedCreate(ctx);
+      if (approvedSnapshot !== JSON.stringify([ctx.source.Resource_Review_Draft, ctx.source.Approved_By, ctx.source.Approved_By_Email, ctx.source.Approved_On])) throw new Error('The approved review changed. Reload and review it before trying again.');
+      const values = createValues(ctx, draft);
+      resourceRowId = nextRowId(ctx.resources);
+      logRowId = nextRowId(ctx.logs);
+      const now = Date.now() / 1000;
+      const applied = {};
+      Object.keys(values).forEach(field => applied[field] = friendlyAppliedValue(field, values[field], ctx.providers));
+      const common = { Applied_By: displayValue(ctx.source.Approved_By), Applied_On: now };
+      // One action bundle links the new row and records a recoverable Partial state.
+      // Explicit vacant row IDs let these actions refer to each other without a second create.
+      attempted = true;
+      await grist.docApi.applyUserActions([
+        ['AddRecord', 'Resources', resourceRowId, values],
+        ['AddRecord', 'KB_Promotion_Log', logRowId, {
+          Submission_Type: 'Resource Submission', Source_Submission_ID: ctx.source.Submission_ID,
+          Entity_Type: 'Resource', Action: 'Create', Canonical_ID: values.Resource_ID || '', Canonical_Row_ID: resourceRowId,
+          Approved_By: displayValue(ctx.source.Approved_By), Approved_By_Email: displayValue(ctx.source.Approved_By_Email),
+          Approved_On: dateTimeSeconds(ctx.source.Approved_On), ...common, Result: 'Partial',
+          Changed_Fields: Object.keys(values).join('\n'), Previous_Values: '{}', Applied_Values: JSON.stringify(applied),
+          Suggestion_Source: draft.suggestion_source || 'Rules', Human_Decision: 'Approved', Override_Reason: '',
+          Implementation_Version: '9A.4', Error_Detail: 'Resource created; final verification is pending.'
+        }],
+        ['UpdateRecord', 'Resource_Submissions', sourceId, { Existing_Resource: resourceRowId, ...common,
+          Promotion_Result: 'Partial', Promotion_Error: 'Resource created; final verification is pending.' }]
+      ]);
+      committed = true;
+      const rows = tableToRows(await grist.docApi.fetchTable('Resources'));
+      const created = rows.find(row => row.id === resourceRowId);
+      if (!created || !hasValue(created.Resource_ID)) throw new Error('Created Resource or Resource ID could not be verified.');
+      if (rows.some(row => row.id !== created.id && row.Resource_ID === created.Resource_ID)) throw new Error('Resource ID is not unique.');
+      const mismatch = Object.keys(values).filter(field => displayValue(normalizeCanonicalValue(field, created[field], ctx.providers)).trim() !== displayValue(applied[field]).trim());
+      if (mismatch.length) throw new Error('Created values need inspection: ' + mismatch.join(', '));
+      applied.Resource_ID = displayValue(created.Resource_ID);
+      await grist.docApi.applyUserActions([
+        ['UpdateRecord', 'KB_Promotion_Log', logRowId, { Result: 'Success', Canonical_ID: created.Resource_ID, Applied_Values: JSON.stringify(applied), Error_Detail: '' }],
+        ['UpdateRecord', 'Resource_Submissions', sourceId, { Review_Status: 'Completed', Promotion_Result: 'Success', Promotion_Error: '' }]
+      ]);
+      setSaveStatus('Resource created and audit recorded. No further action is needed.', 'success');
+    } catch (err) {
+      const message = err.message || String(err);
+      // Never overwrite a successful/partial outcome after an uncertain response.
+      if (attempted) {
+        try {
+          const ctx = await createContext(sourceId);
+          if (ctx.source.Promotion_Result === 'Success' && ctx.source.Review_Status === 'Completed') {
+            setSaveStatus('Resource creation completed; the response was interrupted. Reload to view the result.', 'success');
+            return;
+          }
+          if (committed || ctx.source.Promotion_Result === 'Partial') {
+            setSaveStatus('Resource may already exist. Inspect the linked Resource and audit record before any further action. ' + message, 'error');
+          } else {
+            await grist.docApi.applyUserActions([['UpdateRecord', 'Resource_Submissions', sourceId, { Promotion_Result: 'Failed', Promotion_Error: message }]]);
+            setSaveStatus('Creation could not be confirmed. Inspect Resources and the audit log before retrying. ' + message, 'error');
+          }
+        } catch (_) { setSaveStatus('Creation outcome is uncertain. Reload and check Resources and the audit log before retrying. ' + message, 'error'); }
+      } else { setSaveStatus('Creation stopped before writing: ' + message, 'error'); }
+      window.alert((attempted ? 'Check the Resource and audit log before retrying. ' : 'No Resource was created. ') + message);
+    } finally {
+      promotionInProgress = false;
+      creatingResource = false;
+      const target = pendingResourceSelection || {id: sourceId};
+      pendingResourceSelection = null;
+      const outcome = document.getElementById('saveStatus').textContent;
+      const outcomeClass = document.getElementById('saveStatus').className;
+      try {
+        await render(target);
+        if (target.id === sourceId && currentRecord.Review_Status !== 'Completed') {
+          setSaveStatus(outcome, outcomeClass.includes('error') ? 'error' : undefined);
+        }
+      } catch (_) { setSaveStatus('Could not reload the result. Reload this page and check the Resource and audit log before retrying.', 'error'); }
+    }
+  }
+
   async function promoteApprovedResource() {
+    if (currentRecord && currentRecord.Resource_Action === 'Create') return promoteNewResource();
     if (!currentRecord || !currentRecord.id || promotionInProgress) return;
 
     promotionInProgress = true;
@@ -1252,7 +1436,7 @@
           Suggestion_Source: displayValue(draft.suggestion_source) || 'Rules',
           Human_Decision: 'Approved',
           Override_Reason: '',
-          Implementation_Version: '9A.3a',
+          Implementation_Version: '9A.4',
           Error_Detail: ''
         }],
         ['UpdateRecord', 'Resource_Submissions', rawSubmission.id, {
@@ -1310,7 +1494,7 @@
               Suggestion_Source: 'Rules',
               Human_Decision: 'Approved',
               Override_Reason: '',
-              Implementation_Version: '9A.3a',
+              Implementation_Version: '9A.4',
               Error_Detail: message
             }]
           ]);
@@ -1337,6 +1521,10 @@
       return;
     }
 
+    if (currentRecord.Promotion_Result === 'Partial') {
+      setSaveStatus('Partial creation is locked pending inspection of the Resource and audit record.', 'error');
+      return;
+    }
     if (boolValue(currentRecord.Promotion_Approved)) {
       setSaveStatus('This Resource review is already approved and locked.', 'error');
       return;
@@ -1398,6 +1586,7 @@
   }
 
   grist.onRecord(record => {
+    if (creatingResource) { pendingResourceSelection = record; return; }
     render(record).catch(err => {
       console.error(err);
       setSaveStatus('Widget render failed: ' + (err && err.message ? err.message : String(err)), 'error');
@@ -1431,3 +1620,4 @@
 </script>
 </body>
 </html>
+
