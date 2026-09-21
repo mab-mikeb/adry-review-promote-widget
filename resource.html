@@ -155,7 +155,16 @@
     }
     .readiness-list li.ok { color: #246b2d; }
     .readiness-list li.warn { color: #7a5b00; }
-    .readiness-list li.block { color: #9b1c1c; }
+    .readiness-list li.block { color: #7a5b00; }
+    [hidden] { display: none !important; }
+    .readiness-panel[data-tone="success"] { background: #f0f8f1; border-color: #83ad89; }
+    .readiness-panel[data-tone="info"] { background: #f1f6fb; border-color: #89a9c7; }
+    .readiness-panel[data-tone="warning"] { background: #fff9eb; border-color: #c2a058; }
+    .readiness-panel[data-tone="error"] { background: #fff3f3; border-color: #bb7777; }
+    .readiness-next { font-size: 14px; line-height: 1.5; margin: 0 0 14px; }
+    .readiness-panel details { margin: 12px 0; }
+    .readiness-panel summary { cursor: pointer; }
+    .readiness-panel pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; }
     .readiness-actions {
       display: flex;
       flex-wrap: wrap;
@@ -279,10 +288,23 @@
       </table>
     </div>
 
-    <div class="readiness-panel">
-      <h2>Promotion readiness</h2>
-      <div id="readinessHeadline" class="readiness-headline"></div>
+    <div class="readiness-panel" id="readinessPanel">
+      <h2>Review status</h2>
+      <div id="readinessHeadline" class="readiness-headline" role="status" aria-live="polite"></div>
+      <p id="readinessNext" class="readiness-next"></p>
       <ul id="readinessList" class="readiness-list"></ul>
+      <div id="completedActions" class="readiness-actions" hidden>
+        <button id="viewResource" class="secondary-button" aria-controls="recordDetails" aria-expanded="false">View Resource</button>
+        <button id="viewAudit" class="secondary-button" aria-controls="recordDetails" aria-expanded="false">View audit record</button>
+      </div>
+      <details id="recordDetails" hidden>
+        <summary id="recordDetailsTitle">Details</summary>
+        <pre id="recordDetailsBody"></pre>
+      </details>
+      <details id="errorDetails" hidden>
+        <summary>Technical details</summary>
+        <pre id="errorDetailsBody"></pre>
+      </details>
       <div class="readiness-actions">
         <button id="markReady" class="secondary-button" disabled>Mark Ready to Promote</button>
         <button id="recordApproval" class="approval-button" disabled>Record Human Approval</button>
@@ -311,6 +333,7 @@
   let isRendering = false;
   let isDirty = false;
   let promotionInProgress = false;
+  let detailsRequest = 0;
 
   const FIELD_DEFS = [
     { key: 'Resource_Name', aliases: ['Resource_Name'], type: 'text', rule: 'Submission if supplied; otherwise preserve current.' },
@@ -660,7 +683,7 @@
       draftSaved ? 'ok' : 'block',
       draftSaved
         ? 'Resource review draft is saved.'
-        : (isDirty ? 'Resource review has unsaved changes.' : 'Resource review draft has not been saved yet.')
+        : (isDirty ? 'Save Resource Review Draft to keep your changes.' : 'Click Save Resource Review Draft before continuing.')
     );
 
     add(
@@ -673,7 +696,7 @@
     }
 
     if (action === 'Update' && !matched) {
-      add('block', 'Resource action is UPDATE but no existing Resource is matched.');
+      add('block', 'Match an existing Resource in Existing_Resource before applying an update.');
     }
 
     if (action === 'No change' && !matched) {
@@ -700,12 +723,12 @@
     }
 
     if (action === 'Update') {
-      add(hasValue(getControl('r_final_Resource_Name')) ? 'ok' : 'block', 'Updated Resource retains a Resource Name.');
+      add(hasValue(getControl('r_final_Resource_Name')) ? 'ok' : 'block', hasValue(getControl('r_final_Resource_Name')) ? 'Resource Name is present.' : 'Enter a Resource Name in Suggested / Final, then save the review.');
       const changed = changedResourceFields();
       add(
         changed.length ? 'ok' : 'block',
         changed.length
-          ? 'Approved update contains canonical changes: ' + changed.join(', ') + '.'
+          ? 'Changes to apply: ' + changed.join(', ') + '.'
           : 'Resource Action is Update, but Suggested / Final values are identical to the current canonical Resource.'
       );
     }
@@ -752,6 +775,10 @@
 
   async function render(record) {
     currentRecord = record || null;
+    detailsRequest++;
+    document.getElementById('recordDetails').hidden = true;
+    document.getElementById('recordDetails').open = false;
+    ['viewResource', 'viewAudit'].forEach(id => document.getElementById(id).setAttribute('aria-expanded', 'false'));
 
     if (!record) {
       document.getElementById('waiting').style.display = 'block';
@@ -831,91 +858,156 @@
     };
   }
 
+  function formatApprovalTime(value) {
+    const raw = displayValue(value).trim();
+    if (!raw) return '';
+    const number = Number(raw);
+    const date = new Date(Number.isFinite(number)
+      ? (number < 100000000000 ? number * 1000 : number) : raw);
+    return Number.isNaN(date.getTime()) ? 'an unavailable date' :
+      new Intl.DateTimeFormat(undefined, {
+        year: 'numeric', month: 'short', day: 'numeric',
+        hour: 'numeric', minute: '2-digit', timeZoneName: 'short'
+      }).format(date);
+  }
+
   function updateReadiness() {
-    const result = validateReadiness();
-    const list = document.getElementById('readinessList');
-    const headline = document.getElementById('readinessHeadline');
-    const readyButton = document.getElementById('markReady');
-    const approvalButton = document.getElementById('recordApproval');
-    const reopenButton = document.getElementById('reopenReview');
-    const promoteButton = document.getElementById('promoteApproved');
-    const approvalStatus = document.getElementById('approvalStatus');
-
-    if (!list || !headline || !readyButton || !approvalButton || !reopenButton || !promoteButton || !approvalStatus) return;
-
-    list.innerHTML = '';
-    result.checks.forEach(check => {
-      const item = document.createElement('li');
-      item.className = check.level;
-      item.textContent =
-        (check.level === 'ok' ? '✓ ' : check.level === 'warn' ? '⚠ ' : '✕ ') +
-        check.message;
-      list.appendChild(item);
-    });
-
-    if (!currentRecord) {
-      headline.textContent = 'Select a Resource submission.';
-      readyButton.disabled = true;
-      approvalButton.disabled = true;
-      reopenButton.disabled = true;
-      promoteButton.disabled = true;
-      return;
-    }
-
-    const approved = boolValue(currentRecord.Promotion_Approved);
-    const status = displayValue(currentRecord.Review_Status);
-    const isReadyStatus = status === 'Ready to Promote';
-    const completed = status === 'Completed';
-
-    if (completed) {
-      headline.textContent = 'Resource review is completed.';
-    } else if (approved) {
-      headline.textContent = 'Human approval recorded.';
-    } else if (result.ready && isReadyStatus) {
-      headline.textContent = 'Ready for human approval.';
-    } else if (result.ready) {
-      headline.textContent = 'Review passes validation and can be marked Ready to Promote.';
-    } else {
-      headline.textContent = 'Resolve the blocking items before approval.';
-    }
-
-    readyButton.disabled = completed || approved || !result.ready || isReadyStatus || isDirty;
-    approvalButton.disabled = completed || approved || !result.ready || !isReadyStatus || isDirty;
-    reopenButton.disabled = promotionInProgress || completed || !approved || status !== 'Ready to Promote';
-
+    const el = id => document.getElementById(id);
+    const list = el('readinessList');
+    const buttons = ['markReady', 'recordApproval', 'reopenReview', 'promoteApproved'].map(el);
+    const completed = currentRecord && displayValue(currentRecord.Review_Status) === 'Completed';
+    const approved = currentRecord && boolValue(currentRecord.Promotion_Approved);
+    const failed = currentRecord && displayValue(currentRecord.Promotion_Result) === 'Failed';
+    const successful = completed && displayValue(currentRecord.Promotion_Result) === 'Success';
+    const status = currentRecord ? displayValue(currentRecord.Review_Status) : '';
     const action = getControl('resourceAction');
-    const draft = parseDraft(currentRecord.Resource_Review_Draft);
+    const draft = currentRecord && parseDraft(currentRecord.Resource_Review_Draft);
     const hasBaseline = !!(draft && draft.baseline);
-    promoteButton.disabled =
-      promotionInProgress ||
-      completed ||
-      !approved ||
-      status !== 'Ready to Promote' ||
-      isDirty ||
-      action !== 'Update' ||
-      !currentResource ||
-      !hasBaseline ||
-      !result.ready;
+    const providers = window.__resourceProvidersById || new Map();
+    const changed = currentResource ? changedResourceFields() : [];
+    const stale = !completed && hasBaseline && currentResource &&
+      !baselineMatchesLive(draft.baseline, currentResource, changed, providers);
 
-    if (approved) {
-      const who = displayValue(currentRecord.Approved_By) || 'Recorded approver';
-      const email = displayValue(currentRecord.Approved_By_Email);
-      const when = displayValue(currentRecord.Approved_On);
-      approvalStatus.textContent =
-        'Approved by ' + who +
-        (email ? ' (' + email + ')' : '') +
-        (when ? ' on ' + when : '') +
-        '. The review is locked.';
-      setReviewLocked(true, false);
-    } else if (completed) {
-      approvalStatus.textContent = 'Completed Resource submission is locked as historical workflow evidence.';
-      setReviewLocked(true, false);
+    buttons.forEach(button => { button.disabled = true; button.hidden = !!completed; });
+    el('saveDraft').hidden = !!completed;
+    el('completedActions').hidden = !completed;
+    el('viewResource').disabled = !currentResource;
+    document.querySelector('.approval-note').hidden = !!completed;
+    list.replaceChildren();
+    el('errorDetails').hidden = !failed;
+    el('errorDetailsBody').textContent = failed ? displayValue(currentRecord.Promotion_Error) : '';
+
+    let tone = 'info', title = 'Select a Resource submission.', next = '';
+    if (currentRecord) {
+      setReviewLocked(!!completed || !!approved || promotionInProgress, action === 'No change');
+      const when = formatApprovalTime(currentRecord.Approved_On);
+      el('approvalStatus').textContent = approved
+        ? 'Approved by ' + (displayValue(currentRecord.Approved_By) || 'recorded approver') +
+          (when ? ' on ' + when : '') + '. This review is read-only.'
+        : completed ? 'This submission is read-only.' : 'Human approval has not been recorded.';
+
+      // Completion is a historical outcome, not a fresh readiness check.
+      if (successful) {
+        tone = 'success'; title = '✓ Update completed successfully';
+        next = 'The approved changes were applied to Resource ' +
+          (displayValue(currentResource && currentResource.Resource_ID) || '(see audit record)') +
+          ' and recorded in the audit log. No further action is needed for this submission.';
+        setSaveStatus('Completed. This submission is read-only.', 'success');
+      } else if (completed) {
+        tone = failed ? 'error' : 'info';
+        title = failed ? '✕ Action required — check the recorded outcome' : 'ℹ Review completed';
+        next = 'This submission is read-only. Check the Resource and audit record to confirm the outcome; do not promote it again.';
+        setSaveStatus('Completed submission. See the recorded outcome above.');
+      } else {
+        const result = validateReadiness();
+        result.checks.forEach(check => {
+          const item = document.createElement('li');
+          item.className = check.level;
+          item.textContent = (check.level === 'ok' ? '✓ ' : '⚠ ') + check.message;
+          list.appendChild(item);
+        });
+        el('markReady').disabled = promotionInProgress || approved || !result.ready || status === 'Ready to Promote' || isDirty;
+        el('recordApproval').disabled = promotionInProgress || approved || !result.ready || status !== 'Ready to Promote' || isDirty;
+        el('reopenReview').disabled = promotionInProgress || !approved || status !== 'Ready to Promote';
+        el('promoteApproved').disabled = promotionInProgress || failed || stale || !approved ||
+          status !== 'Ready to Promote' || isDirty || action !== 'Update' || !currentResource || !hasBaseline || !result.ready;
+
+        if (promotionInProgress) {
+          title = 'ℹ Checking and applying the approved update';
+          next = 'Please wait for the result before taking another action.';
+        } else if (stale && !failed) {
+          tone = 'warning'; title = '⚠ Re-review required';
+          next = (approved ? 'Reopen the approved review. ' : '') +
+            'Compare the latest knowledge-base values, save your review, and approve it again before promotion.';
+        } else if (failed) {
+          tone = 'error'; title = '✕ Action required — promotion did not finish';
+          next = 'Changes may already have been applied. Check the Resource and KB_Promotion_Log before retrying. After resolving the issue, reopen the review, save, and approve again.';
+        } else if (approved && !hasBaseline) {
+          tone = 'warning'; title = '⚠ Review needs refreshing';
+          next = 'This approval uses an older draft. Reopen the review, save it, and approve again to enable promotion.';
+        } else if (isDirty || !draft) {
+          tone = 'warning'; title = '⚠ Save your review';
+          next = 'Check the final values, then click Save Resource Review Draft.';
+        } else if (action === 'Update' && currentResource && !changed.length) {
+          title = 'ℹ No changes needed';
+          next = 'The reviewed values match the knowledge base. Nothing needs updating. Leave this submission unpromoted; closing without changes is not available yet.';
+          list.replaceChildren();
+        } else if (action !== 'Update') {
+          title = 'ℹ This action cannot be completed here yet';
+          next = 'This version applies updates to existing Resources only. You can save this review for later; do not change the decision just to enable promotion.';
+        } else if (!result.ready) {
+          tone = 'warning'; title = '⚠ Review needed';
+          next = 'Resolve the items below, then save your review.';
+        } else if (approved) {
+          title = '✓ Approved — ready to apply';
+          next = 'Click Promote Approved Resource and confirm the listed changes. Approval alone has not changed the Resource.';
+        } else if (status === 'Ready to Promote') {
+          title = 'ℹ Ready for human approval';
+          next = 'Click Record Human Approval after checking the saved final values.';
+        } else {
+          title = '✓ Review is ready';
+          next = 'Click Mark Ready to Promote, then Record Human Approval.';
+        }
+      }
     } else {
-      approvalStatus.textContent =
-        isReadyStatus
-          ? 'Status is Ready to Promote. Record Human Approval only after reviewing the final saved draft.'
-          : 'Approval is not yet recorded.';
-      setReviewLocked(false, getControl('resourceAction') === 'No change');
+      el('approvalStatus').textContent = '';
+    }
+    el('readinessPanel').dataset.tone = tone;
+    el('readinessHeadline').textContent = title;
+    el('readinessNext').textContent = next;
+  }
+
+  async function showCompletedDetails(kind) {
+    if (!currentRecord || displayValue(currentRecord.Review_Status) !== 'Completed') return;
+    const submissionId = currentRecord.id;
+    const sourceId = displayValue(currentRecord.Submission_ID);
+    const resourceId = refRowId(currentRecord.Existing_Resource);
+    const panel = document.getElementById('recordDetails');
+    const body = document.getElementById('recordDetailsBody');
+    panel.hidden = false;
+    panel.open = true;
+    document.getElementById('viewResource').setAttribute('aria-expanded', String(kind === 'resource'));
+    document.getElementById('viewAudit').setAttribute('aria-expanded', String(kind === 'audit'));
+    document.getElementById('recordDetailsTitle').textContent = kind === 'resource' ? 'Current Resource (read-only)' : 'Audit records (read-only)';
+    body.textContent = 'Loading…';
+    const request = ++detailsRequest;
+    try {
+      const rows = tableToRows(await grist.docApi.fetchTable(kind === 'resource' ? 'Resources' : 'KB_Promotion_Log'));
+      if (!currentRecord || currentRecord.id !== submissionId || request !== detailsRequest) return;
+      const selected = kind === 'resource' ? rows.filter(row => row.id === resourceId) :
+        rows.filter(row => sourceId && displayValue(row.Source_Submission_ID) === sourceId && displayValue(row.Entity_Type) === 'Resource');
+      const fields = kind === 'resource' ? ['Resource_ID', ...FIELD_DEFS.map(def => def.key)] :
+        ['Promotion_ID', 'Source_Submission_ID', 'Canonical_ID', 'Action', 'Result', 'Changed_Fields',
+         'Previous_Values', 'Applied_Values', 'Approved_By', 'Approved_On', 'Applied_By', 'Applied_On', 'Error_Detail'];
+      body.textContent = selected.length ? selected.map(row => fields
+        .filter(field => hasValue(row[field]))
+        .map(field => field.replace(/_/g, ' ') + ': ' +
+          (field.endsWith('_On') ? formatApprovalTime(row[field]) :
+            kind === 'resource' ? normalizeCanonicalValue(field, row[field], window.__resourceProvidersById || new Map()) : displayValue(row[field])))
+        .join('\n')).join('\n\n────────\n\n') : 'No matching record found. Open the table in the left sidebar to investigate.';
+    } catch (err) {
+      if (!currentRecord || currentRecord.id !== submissionId || request !== detailsRequest) return;
+      body.textContent = 'Could not load these details. Open the table in the left sidebar. ' + (err.message || String(err));
     }
   }
 
@@ -980,7 +1072,7 @@
       currentResource = refreshed.resource;
       window.__resourceProvidersById = refreshed.providersById;
 
-      setSaveStatus('Human approval recorded. Canonical Resource promotion is not enabled yet.', 'success');
+      setSaveStatus('Human approval recorded. See Review status for the next action.', 'success');
       updateReadiness();
     } catch (err) {
       console.error(err);
@@ -1226,7 +1318,11 @@
         }
       }
 
-      setSaveStatus('RESOURCE PROMOTION FAILED — ' + message, 'error');
+      if (rawSubmission && currentRecord && currentRecord.id === rawSubmission.id) {
+        currentRecord.Promotion_Result = 'Failed';
+        currentRecord.Promotion_Error = message;
+      }
+      setSaveStatus('Promotion did not finish. Check the Resource and audit log before retrying. See Technical details.', 'error');
       window.alert('Resource promotion stopped: ' + message);
     } finally {
       promotionInProgress = false;
@@ -1324,6 +1420,8 @@
     }
   });
 
+  document.getElementById('viewResource').addEventListener('click', () => showCompletedDetails('resource'));
+  document.getElementById('viewAudit').addEventListener('click', () => showCompletedDetails('audit'));
   document.getElementById('saveDraft').addEventListener('click', saveDraft);
   document.getElementById('markReady').addEventListener('click', markReadyToPromote);
   document.getElementById('recordApproval').addEventListener('click', recordHumanApproval);
