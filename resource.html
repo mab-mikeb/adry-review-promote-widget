@@ -243,7 +243,7 @@
 <div class="shell">
   <div class="header">
     <h1>Project ADry — Resource Review & Promote</h1>
-    <p>Phase 9A.3 · Existing Resource update promotion + audit</p>
+    <p>Phase 9A.3a · Resource Review Status &amp; Completion UX</p>
   </div>
 
   <div id="waiting" class="waiting">Select a resource submission in Grist.</div>
@@ -270,7 +270,7 @@
     <div id="reviewContent" class="content">
       <div id="matchNotice" class="notice"></div>
       <div class="notice">
-        <strong>Phase 9A.3:</strong> approved matched Resource updates can now be promoted to the canonical Resources table.
+        <strong>Phase 9A.3a:</strong> approved matched Resource updates can now be promoted to the canonical Resources table.
         Only approved changed fields are written, with before/after values recorded in KB_Promotion_Log. Create and non-promotion dispositions remain disabled until later phases.
       </div>
 
@@ -847,6 +847,7 @@
       fields[def.key] = getControl('r_final_' + def.key);
     });
     return {
+      // Draft format remains 9A.3; 9A.3a changes presentation only.
       version: '9A.3',
       suggestion_source: 'Rules',
       action: getControl('resourceAction'),
@@ -1141,7 +1142,7 @@
 
       if (!liveResource) throw new Error('No existing Resource is matched.');
       if (displayValue(rawSubmission.Resource_Action) !== 'Update') {
-        throw new Error('Phase 9A.3 only promotes Resource Action = Update.');
+        throw new Error('This version only promotes Resource Action = Update.');
       }
       if (!boolValue(rawSubmission.Promotion_Approved)) {
         throw new Error('Promotion_Approved is not true on the source submission.');
@@ -1251,7 +1252,7 @@
           Suggestion_Source: displayValue(draft.suggestion_source) || 'Rules',
           Human_Decision: 'Approved',
           Override_Reason: '',
-          Implementation_Version: '9A.3',
+          Implementation_Version: '9A.3a',
           Error_Detail: ''
         }],
         ['UpdateRecord', 'Resource_Submissions', rawSubmission.id, {
@@ -1273,7 +1274,7 @@
         'success'
       );
     } catch (err) {
-      console.error('Phase 9A.3 Resource promotion failed', err);
+      console.error('Phase 9A.3a Resource promotion failed', err);
       const message = err && err.message ? err.message : String(err);
 
       if (rawSubmission) {
@@ -1309,7 +1310,7 @@
               Suggestion_Source: 'Rules',
               Human_Decision: 'Approved',
               Override_Reason: '',
-              Implementation_Version: '9A.3',
+              Implementation_Version: '9A.3a',
               Error_Detail: message
             }]
           ]);
