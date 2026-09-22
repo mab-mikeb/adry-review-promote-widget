@@ -243,7 +243,7 @@
 <div class="shell">
   <div class="header">
     <h1>Project ADry — Resource Review & Promote</h1>
-    <p>Phase 9A.4 · New Resource Creation &amp; Audit</p>
+    <p>Phase 9A.4a · Schema Validation &amp; Recovery</p>
   </div>
 
   <div id="waiting" class="waiting">Select a resource submission in Grist.</div>
@@ -295,6 +295,7 @@
       <ul id="readinessList" class="readiness-list"></ul>
       <div id="completedActions" class="readiness-actions" hidden>
         <button id="viewResource" class="secondary-button" aria-controls="recordDetails" aria-expanded="false">View Resource</button>
+        <button id="recoverPartial" class="secondary-button" hidden>Check and recover creation</button>
         <button id="viewAudit" class="secondary-button" aria-controls="recordDetails" aria-expanded="false">View audit record</button>
       </div>
       <details id="recordDetails" hidden>
@@ -336,6 +337,7 @@
   let detailsRequest = 0;
   let pendingResourceSelection = null;
   let creatingResource = false;
+  let resourceSchema = new Map();
 
   const FIELD_DEFS = [
     { key: 'Resource_Name', aliases: ['Resource_Name'], type: 'text', rule: 'Submission if supplied; otherwise preserve current.' },
@@ -428,12 +430,15 @@
 
   function setControl(id, value) {
     const el = document.getElementById(id);
-    if (el) el.value = displayValue(value);
+    if (el && el.multiple) {
+      const values = Array.isArray(value) ? value : parseChoiceListText(value);
+      Array.from(el.options).forEach(option => option.selected = values.includes(option.value));
+    } else if (el) el.value = displayValue(value);
   }
 
   function getControl(id) {
     const el = document.getElementById(id);
-    return el ? el.value : '';
+    return el ? (el.multiple ? Array.from(el.selectedOptions).map(o => o.value).filter(Boolean) : el.value) : '';
   }
 
   function put(id, value, emptyText) {
@@ -549,17 +554,45 @@
     throw new Error('Provider "' + text + '" matches more than one Providers row.');
   }
 
-  function canonicalWriteValue(field, value, providersById) {
-    if (field === 'Provider') {
-      return resolveProviderRowId(value, providersById);
+  function schemaMap(tables, columns) {
+    const table = tables.find(row => row.tableId === 'Resources');
+    if (!table) throw new Error('Resources schema is unavailable. No promotion is allowed.');
+    return new Map(columns.filter(col => col.parentId === table.id).map(col => [col.colId, col]));
+  }
+
+  function columnChoices(col) {
+    let options;
+    try { options = JSON.parse(col.widgetOptions || '{}'); }
+    catch (_) { throw new Error(col.colId + ': choice settings could not be read.'); }
+    return Array.isArray(options.choices) ? options.choices : [];
+  }
+
+  function canonicalWriteValue(field, value, providersById, schema = resourceSchema) {
+    const col = schema.get(field);
+    if (!col || col.isFormula) throw new Error(field + ': editable column metadata is unavailable.');
+    const text = displayValue(value).trim();
+    const type = col.type;
+    if (type === 'Choice' || type === 'ChoiceList') {
+      const values = type === 'Choice' ? (text ? [text] : []) :
+        Array.isArray(value) ? (value[0] === 'L' ? value.slice(1) : value) : parseChoiceListText(text);
+      const allowed = columnChoices(col);
+      const invalid = values.filter(v => !allowed.includes(v));
+      if (invalid.length) throw new Error(field + ': choose a configured option. Unrecognized: ' + invalid.join(', ') + '. Ask the administrator to review missing choices.');
+      return type === 'Choice' ? text : values.length ? ['L', ...values] : null;
     }
-    if (field === 'Last_Checked') {
-      return dateCell(value);
-    }
-    if (['Intended_User', 'Support_Need', 'Purchase_Model'].includes(field)) {
-      return choiceListCell(value);
-    }
-    return displayValue(value);
+    if (field === 'Provider' && type === 'Ref:Providers') return resolveProviderRowId(value, providersById);
+    if (type === 'Date') return dateCell(value);
+    if (type === 'Text') return displayValue(value);
+    throw new Error(field + ': unsupported column type ' + type + '. Review configuration before promotion.');
+  }
+
+  function schemaIssues(fields, providers, keys = FIELD_DEFS.map(d => d.key)) {
+    const issues = [];
+    keys.forEach(key => {
+      try { canonicalWriteValue(key, fields[key], providers); }
+      catch (err) { issues.push(err.message); }
+    });
+    return issues;
   }
 
   function friendlyAppliedValue(field, value, providersById) {
@@ -597,7 +630,7 @@
       const submitted = normalizeReviewValue(def.key, submittedRaw);
       const hasDraft = draftFields && Object.prototype.hasOwnProperty.call(draftFields, def.key);
       const suggested = hasDraft
-        ? normalizeReviewValue(def.key, draftFields[def.key])
+        ? draftFields[def.key]
         : (hasValue(submitted) ? submitted : current);
 
       const fieldCell = document.createElement('td');
@@ -618,14 +651,33 @@
       }
 
       const finalCell = document.createElement('td');
-      const control = document.createElement(def.type === 'textarea' ? 'textarea' : 'input');
-      if (def.type === 'date') control.type = 'date';
+      const col = resourceSchema.get(def.key);
+      const choice = col && ['Choice', 'ChoiceList'].includes(col.type);
+      const control = document.createElement(choice ? 'select' : def.type === 'textarea' ? 'textarea' : 'input');
+      if (choice) {
+        control.multiple = col.type === 'ChoiceList';
+        const selected = control.multiple ? (Array.isArray(suggested) ? suggested : parseChoiceListText(suggested)) : [displayValue(suggested)];
+        const choices = columnChoices(col);
+        const options = [...new Set(['', ...choices, ...selected])];
+        options.forEach(value => {
+          const option = document.createElement('option');
+          option.value = value;
+          option.textContent = value ? value + (choices.includes(value) ? '' : ' — not configured') : 'Not specified';
+          option.selected = selected.includes(value);
+          control.appendChild(option);
+        });
+      } else if (def.type === 'date') control.type = 'date';
       else if (def.type !== 'textarea') control.type = 'text';
       control.id = 'r_final_' + def.key;
-      control.value = displayValue(suggested);
+      if (!control.multiple) control.value = displayValue(suggested);
       control.addEventListener('input', markDirty);
       control.addEventListener('change', markDirty);
       finalCell.appendChild(control);
+      if (choice) {
+        const help = document.createElement('small');
+        help.textContent = control.multiple ? 'Choose applicable options (Ctrl/Cmd-click for multiple). Leave empty if unspecified.' : 'Choose a configured option, or leave unspecified. Missing options require an administrator to update the column choices.';
+        finalCell.appendChild(help);
+      }
 
       const ruleCell = document.createElement('td');
       const badge = document.createElement('span');
@@ -735,13 +787,17 @@
       );
     }
 
+    if (['Create', 'Update'].includes(action)) {
+      const fields = Object.fromEntries(FIELD_DEFS.map(d => [d.key, getControl('r_final_' + d.key)]));
+      schemaIssues(fields, window.__resourceProvidersById || new Map(), action === 'Update' ? changedResourceFields() : undefined).forEach(message => add('block', message));
+    }
     const ready = !checks.some(check => check.level === 'block');
     return { ready, checks };
   }
 
   function setReviewLocked(locked, noChange) {
     document.getElementById('resourceAction').disabled = locked;
-    document.querySelectorAll('#resourceRows input, #resourceRows textarea').forEach(el => {
+    document.querySelectorAll('#resourceRows input, #resourceRows textarea, #resourceRows select').forEach(el => {
       el.disabled = locked || noChange;
     });
     document.getElementById('reviewContent').classList.toggle('no-change', !!noChange);
@@ -756,11 +812,13 @@
   }
 
   async function fetchContext(record) {
-    const [subData, resourceData, providerData] = await Promise.all([
+    const [subData, resourceData, providerData, tables, columns] = await Promise.all([
       grist.docApi.fetchTable('Resource_Submissions'),
       grist.docApi.fetchTable('Resources'),
-      grist.docApi.fetchTable('Providers')
+      grist.docApi.fetchTable('Providers'),
+      grist.docApi.fetchTable('_grist_Tables'), grist.docApi.fetchTable('_grist_Tables_column')
     ]);
+    resourceSchema = schemaMap(tableToRows(tables), tableToRows(columns));
 
     const submissions = tableToRows(subData);
     const resources = tableToRows(resourceData);
@@ -892,8 +950,10 @@
     const stale = !completed && hasBaseline && currentResource &&
       !baselineMatchesLive(draft.baseline, currentResource, changed, providers);
 
-    buttons.forEach(button => { button.disabled = true; button.hidden = !!completed; });
-    el('saveDraft').hidden = !!completed;
+    buttons.forEach(button => { button.disabled = true; button.hidden = !!completed || !!partial; });
+    el('saveDraft').hidden = !!completed || !!partial;
+    el('recoverPartial').hidden = !partial || action !== 'Create';
+    el('recoverPartial').disabled = promotionInProgress;
     el('completedActions').hidden = !completed && !partial;
     el('viewResource').disabled = !currentResource;
     document.querySelector('.approval-note').hidden = !!completed;
@@ -924,7 +984,7 @@
         setSaveStatus('Completed submission. See the recorded outcome above.');
       } else {
         const result = validateReadiness();
-        result.checks.forEach(check => {
+        (partial ? [] : result.checks).forEach(check => {
           const item = document.createElement('li');
           item.className = check.level;
           item.textContent = (check.level === 'ok' ? '✓ ' : '⚠ ') + check.message;
@@ -946,7 +1006,7 @@
             'Compare the latest knowledge-base values, save your review, and approve it again before promotion.';
         } else if (failed) {
           tone = 'error'; title = '✕ Action required — promotion did not finish';
-          next = partial ? 'A Resource was created, but final verification is pending. Inspect View Resource and View audit record. Do not create again; resolve this partial result first.' : 'Changes may already have been applied. Check the Resource and KB_Promotion_Log before retrying. After resolving the issue, reopen the review, save, and approve again.';
+          next = partial ? 'A Resource was created, but final verification is pending. Use Check and recover creation to validate the linked Resource. It will never create another Resource. Configuration issues must be resolved first.' : 'Changes may already have been applied. Check the Resource and KB_Promotion_Log before retrying. After resolving the issue, reopen the review, save, and approve again.';
         } else if (approved && (action === 'Create' ? !draft || draft.version !== '9A.4' : !hasBaseline)) {
           tone = 'warning'; title = '⚠ Review needs refreshing';
           next = 'This approval uses an older draft. Reopen the review, save it, and approve again to enable promotion.';
@@ -1195,7 +1255,7 @@
   function createValues(ctx, draft) {
     const table = ctx.tables.find(row => row.tableId === 'Resources');
     if (!table) throw new Error('Resources schema could not be read.');
-    const columns = new Map(ctx.columns.filter(col => col.parentId === table.id).map(col => [col.colId, col]));
+    const columns = schemaMap(ctx.tables, ctx.columns);
     const idColumn = columns.get('Resource_ID');
     if (!idColumn) throw new Error('Resource_ID column is missing.');
     const values = {};
@@ -1206,7 +1266,7 @@
         if (hasValue(value)) throw new Error(def.key + ' is missing or formula-controlled; review the schema before creation.');
         return;
       }
-      values[def.key] = canonicalWriteValue(def.key, value, ctx.providers);
+      values[def.key] = canonicalWriteValue(def.key, value, ctx.providers, columns);
     });
     // Leave formula/trigger-generated IDs to Grist. Allocate only plain editable IDs.
     if (!idColumn.isFormula && !hasValue(idColumn.formula)) {
@@ -1217,6 +1277,77 @@
       values.Resource_ID = 'RES-' + String(max + 1).padStart(3, '0');
     }
     return values;
+  }
+
+  function recoveryPlan(ctx) {
+    const source = ctx.source;
+    if (source.Promotion_Result !== 'Partial' || source.Resource_Action !== 'Create' ||
+        !boolValue(source.Promotion_Approved) || source.Review_Status !== 'Ready to Promote') throw new Error('This is not an approved partial creation.');
+    const draft = parseDraft(source.Resource_Review_Draft);
+    if (!draft || draft.action !== 'Create' || !draft.fields || !hasValue(source.Approved_By) || !hasValue(source.Approved_On) || !hasValue(source.Approved_By_Email)) throw new Error('Saved approval evidence is incomplete.');
+    const resource = ctx.resources.find(r => r.id === refRowId(source.Existing_Resource));
+    if (!resource || !hasValue(resource.Resource_ID)) throw new Error('Linked Resource could not be verified.');
+    if (ctx.resources.some(r => r.id !== resource.id && r.Resource_ID === resource.Resource_ID)) throw new Error('Resource ID is not unique.');
+    const logs = ctx.logs.filter(r => r.Source_Submission_ID === source.Submission_ID && r.Submission_Type === 'Resource Submission' && r.Entity_Type === 'Resource' && r.Action === 'Create');
+    if (logs.length !== 1 || logs[0].Result !== 'Partial' || Number(logs[0].Canonical_Row_ID) !== resource.id) throw new Error('A single matching partial creation audit is required.');
+    const log = logs[0];
+    if (log.Approved_By !== source.Approved_By || log.Approved_By_Email !== source.Approved_By_Email || dateTimeSeconds(log.Approved_On) !== dateTimeSeconds(source.Approved_On)) throw new Error('Approval evidence differs from the creation audit.');
+    const columns = schemaMap(ctx.tables, ctx.columns);
+    const corrections = {}, applied = {};
+    FIELD_DEFS.forEach(def => {
+      const col = columns.get(def.key);
+      const desired = canonicalWriteValue(def.key, draft.fields[def.key], ctx.providers, columns);
+      applied[def.key] = friendlyAppliedValue(def.key, desired, ctx.providers);
+      const actual = normalizeCanonicalValue(def.key, resource[def.key], ctx.providers);
+      if (displayValue(actual).trim() === displayValue(applied[def.key]).trim()) return;
+      // Only the known empty-list-to-single-choice defect is repairable automatically.
+      if (col.type === 'Choice' && !hasValue(draft.fields[def.key]) &&
+          (resource[def.key] === '[]' || (Array.isArray(resource[def.key]) && resource[def.key][0] === 'L' && resource[def.key].length === 1))) {
+        corrections[def.key] = '';
+      } else throw new Error(def.key + ': stored value differs from the approved draft. Manual investigation is required.');
+    });
+    applied.Resource_ID = resource.Resource_ID;
+    return { resource, log, corrections, applied, snapshot: JSON.stringify([source, resource, log, ctx.columns]) };
+  }
+
+  async function recoverPartialCreation() {
+    if (!currentRecord || promotionInProgress) return;
+    const sourceId = currentRecord.id;
+    creatingResource = promotionInProgress = true;
+    updateReadiness();
+    try {
+      let ctx = await createContext(sourceId);
+      let plan = recoveryPlan(ctx);
+      if (!window.confirm('Recover existing Resource ' + plan.resource.Resource_ID + '?\n\n' +
+          (Object.keys(plan.corrections).length ? 'Restore approved blank values: ' + Object.keys(plan.corrections).join(', ') : 'Verify the existing approved values.') +
+          '\nNo new Resource will be created. The original attempt will be preserved in audit details.')) return;
+      const fresh = await createContext(sourceId);
+      const rechecked = recoveryPlan(fresh);
+      if (plan.snapshot !== rechecked.snapshot) throw new Error('The record or configuration changed. Run the recovery check again.');
+      if (Object.keys(plan.corrections).length) {
+        await grist.docApi.applyUserActions([['UpdateRecord', 'Resources', plan.resource.id, plan.corrections]]);
+      }
+      ctx = await createContext(sourceId);
+      const verified = recoveryPlan(ctx);
+      if (Object.keys(verified.corrections).length) throw new Error('Blank-value repair did not persist.');
+      if (ctx.source.Resource_Review_Draft !== fresh.source.Resource_Review_Draft || ctx.source.Approved_On !== fresh.source.Approved_On || JSON.stringify(ctx.logs) !== JSON.stringify(fresh.logs)) throw new Error('Approval or audit changed during recovery. Stop and inspect.');
+      await grist.docApi.applyUserActions([
+        ['UpdateRecord', 'KB_Promotion_Log', plan.log.id, {
+          Result: 'Success', Canonical_ID: plan.resource.Resource_ID, Applied_Values: JSON.stringify(verified.applied),
+          Error_Detail: JSON.stringify({ recovery_version: '9A.4a', recovered_on: new Date().toISOString(), corrected_fields: Object.keys(plan.corrections), original_attempt: plan.log })
+        }],
+        ['UpdateRecord', 'Resource_Submissions', sourceId, { Review_Status: 'Completed', Promotion_Result: 'Success', Promotion_Error: '' }]
+      ]);
+    } catch (err) {
+      window.alert('Recovery stopped. No additional Resource was created. ' + err.message);
+      setSaveStatus('Recovery requires attention: ' + err.message, 'error');
+    } finally {
+      const message = document.getElementById('saveStatus').textContent;
+      creatingResource = promotionInProgress = false;
+      const target = pendingResourceSelection || {id: sourceId}; pendingResourceSelection = null;
+      await render(target);
+      if (currentRecord.Promotion_Result === 'Partial') setSaveStatus(message, 'error');
+    }
   }
 
   async function promoteNewResource() {
@@ -1255,7 +1386,7 @@
           Approved_On: dateTimeSeconds(ctx.source.Approved_On), ...common, Result: 'Partial',
           Changed_Fields: Object.keys(values).join('\n'), Previous_Values: '{}', Applied_Values: JSON.stringify(applied),
           Suggestion_Source: draft.suggestion_source || 'Rules', Human_Decision: 'Approved', Override_Reason: '',
-          Implementation_Version: '9A.4', Error_Detail: 'Resource created; final verification is pending.'
+          Implementation_Version: '9A.4a', Error_Detail: 'Resource created; final verification is pending.'
         }],
         ['UpdateRecord', 'Resource_Submissions', sourceId, { Existing_Resource: resourceRowId, ...common,
           Promotion_Result: 'Partial', Promotion_Error: 'Resource created; final verification is pending.' }]
@@ -1284,6 +1415,7 @@
             return;
           }
           if (committed || ctx.source.Promotion_Result === 'Partial') {
+            await grist.docApi.applyUserActions([['UpdateRecord', 'Resource_Submissions', sourceId, { Promotion_Error: message }]]);
             setSaveStatus('Resource may already exist. Inspect the linked Resource and audit record before any further action. ' + message, 'error');
           } else {
             await grist.docApi.applyUserActions([['UpdateRecord', 'Resource_Submissions', sourceId, { Promotion_Result: 'Failed', Promotion_Error: message }]]);
@@ -1309,6 +1441,7 @@
   }
 
   async function promoteApprovedResource() {
+    if (currentRecord && currentRecord.Promotion_Result === 'Partial') { setSaveStatus('Use Check and recover creation for this partial result.', 'error'); return; }
     if (currentRecord && currentRecord.Resource_Action === 'Create') return promoteNewResource();
     if (!currentRecord || !currentRecord.id || promotionInProgress) return;
 
@@ -1377,7 +1510,7 @@
       const applied = {};
 
       changedFields.forEach(field => {
-        const writeValue = canonicalWriteValue(field, desiredFriendly[field], providersById);
+        const writeValue = canonicalWriteValue(field, draft.fields[field], providersById);
         changed[field] = writeValue;
         previous[field] = normalizeCanonicalValue(field, liveResource[field], providersById);
         applied[field] = friendlyAppliedValue(field, writeValue, providersById);
@@ -1436,7 +1569,7 @@
           Suggestion_Source: displayValue(draft.suggestion_source) || 'Rules',
           Human_Decision: 'Approved',
           Override_Reason: '',
-          Implementation_Version: '9A.4',
+          Implementation_Version: '9A.4a',
           Error_Detail: ''
         }],
         ['UpdateRecord', 'Resource_Submissions', rawSubmission.id, {
@@ -1494,7 +1627,7 @@
               Suggestion_Source: 'Rules',
               Human_Decision: 'Approved',
               Override_Reason: '',
-              Implementation_Version: '9A.4',
+              Implementation_Version: '9A.4a',
               Error_Detail: message
             }]
           ]);
@@ -1610,6 +1743,7 @@
     }
   });
 
+  document.getElementById('recoverPartial').addEventListener('click', recoverPartialCreation);
   document.getElementById('viewResource').addEventListener('click', () => showCompletedDetails('resource'));
   document.getElementById('viewAudit').addEventListener('click', () => showCompletedDetails('audit'));
   document.getElementById('saveDraft').addEventListener('click', saveDraft);
