@@ -243,7 +243,7 @@
 <div class="shell">
   <div class="header">
     <h1>Project ADry — Resource Review & Promote</h1>
-    <p>Phase 9A.4b · Optional-field Recovery Fix</p>
+    <p>Phase 9A.5 · Resource review dispositions</p>
   </div>
 
   <div id="waiting" class="waiting">Select a resource submission in Grist.</div>
@@ -270,8 +270,8 @@
     <div id="reviewContent" class="content">
       <div id="matchNotice" class="notice"></div>
       <div class="notice">
-        <strong>Phase 9A.4:</strong> approved new Resources can be created, and approved matched Resources can be updated.
-        Only approved changed fields are written, with before/after values recorded in KB_Promotion_Log. No change, rejection, and verification dispositions remain unavailable for finalization.
+        <strong>Phase 9A.5:</strong> approved new Resources can be created, and approved matched Resources can be updated.
+        Only approved changed fields are written, with before/after values recorded in KB_Promotion_Log. No change and Reject close the review without changing Resources. Verification required holds the submission for follow-up.
       </div>
 
       <table class="review-table">
@@ -288,6 +288,13 @@
       </table>
     </div>
 
+    <div id="dispositionFields" hidden style="padding: 20px">
+      <label for="dispositionReason">Decision reason / verification follow-up (required)</label>
+      <textarea id="dispositionReason" rows="3" style="width:100%"></textarea>
+      <label for="dispositionReviewer">Reviewer name (recorded as entered; required)</label>
+      <input id="dispositionReviewer" type="text">
+      <p>These decisions do not change Resources. The saved review retains the decision history.</p>
+    </div>
     <div class="readiness-panel" id="readinessPanel">
       <h2>Review status</h2>
       <div id="readinessHeadline" class="readiness-headline" role="status" aria-live="polite"></div>
@@ -307,6 +314,9 @@
         <pre id="errorDetailsBody"></pre>
       </details>
       <div class="readiness-actions">
+        <button id="finalizeDisposition" class="secondary-button" hidden>Record decision</button>
+        <button id="resumeDisposition" class="secondary-button" hidden>Resume review</button>
+        <button id="viewDisposition" class="secondary-button" hidden>View decision history</button>
         <button id="markReady" class="secondary-button" disabled>Mark Ready to Promote</button>
         <button id="recordApproval" class="approval-button" disabled>Record Human Approval</button>
         <button id="reopenReview" class="reopen-button" disabled>Reopen Approved Review</button>
@@ -759,16 +769,9 @@
       add('block', 'Resource action is NO CHANGE but no existing Resource is matched.');
     }
 
-    if (action === 'Verification required') {
-      add('block', 'Resource-level verification is unresolved. Verification disposition handling will be added after the promotion path is proven.');
-    }
-
-    if (action === 'Reject') {
-      add('block', 'Resource action is REJECT. Rejected resources are not approved for promotion.');
-    }
-
-    if (action === 'No change') {
-      add('block', 'No change does not require promotion approval. Disposition finalization will be added after the promotion path is proven.');
+    if (isDisposition(action)) {
+      add(hasValue(getControl('dispositionReason')) ? 'ok' : 'block', 'A decision reason or verification follow-up is required.');
+      add(hasValue(getControl('dispositionReviewer')) ? 'ok' : 'block', 'A reviewer name is required.');
     }
 
     if (action === 'Create') {
@@ -799,6 +802,7 @@
 
   function setReviewLocked(locked, noChange) {
     document.getElementById('resourceAction').disabled = locked;
+    ['dispositionReason','dispositionReviewer'].forEach(id => document.getElementById(id).disabled = locked);
     document.querySelectorAll('#resourceRows input, #resourceRows textarea, #resourceRows select').forEach(el => {
       el.disabled = locked || noChange;
     });
@@ -859,6 +863,8 @@
 
     const draft = parseDraft(currentRecord.Resource_Review_Draft) || {};
     const draftFields = draft.fields || {};
+    setControl('dispositionReason', draft.decision_reason || '');
+    setControl('dispositionReviewer', draft.decision_reviewer || '');
 
     put('submissionBadge', 'Submission: ' + (displayValue(currentRecord.Submission_ID) || 'Unknown'));
     put('statusBadge', 'Status: ' + (displayValue(currentRecord.Review_Status) || 'Not set'));
@@ -913,6 +919,9 @@
     return {
       // 9A.4 creation drafts require a fresh review and approval.
       version: '9A.4',
+      decision_reason: getControl('dispositionReason').trim(),
+      decision_reviewer: getControl('dispositionReviewer').trim(),
+      decision_history: (parseDraft(currentRecord.Resource_Review_Draft) || {}).decision_history || [],
       suggestion_source: 'Rules',
       action: getControl('resourceAction'),
       baseline: buildResourceBaseline(
@@ -948,26 +957,35 @@
     const status = currentRecord ? displayValue(currentRecord.Review_Status) : '';
     const action = getControl('resourceAction');
     const draft = currentRecord && parseDraft(currentRecord.Resource_Review_Draft);
+    const disposition = isDisposition(action);
+    const held = status === 'Verification Required';
+    const history = draft && draft.decision_history || [];
+    el('dispositionFields').hidden = !disposition;
+    el('finalizeDisposition').hidden = !disposition || !!completed || held || !!partial;
+    el('finalizeDisposition').disabled = true;
+    el('resumeDisposition').hidden = !held;
+    el('resumeDisposition').disabled = promotionInProgress;
+    el('viewDisposition').hidden = !history.length;
     const hasBaseline = !!(draft && draft.baseline);
     const providers = window.__resourceProvidersById || new Map();
     const changed = currentResource ? changedResourceFields() : [];
     const stale = !completed && hasBaseline && currentResource &&
       !baselineMatchesLive(draft.baseline, currentResource, changed, providers);
 
-    buttons.forEach(button => { button.disabled = true; button.hidden = !!completed || !!partial; });
-    el('saveDraft').hidden = !!completed || !!partial;
+    buttons.forEach(button => { button.disabled = true; button.hidden = !!completed || !!partial || disposition || held; });
+    el('saveDraft').hidden = !!completed || !!partial || held;
     el('recoverPartial').hidden = !partial || action !== 'Create';
     el('recoverPartial').disabled = promotionInProgress;
     el('completedActions').hidden = !completed && !partial;
     el('viewResource').disabled = !currentResource;
-    document.querySelector('.approval-note').hidden = !!completed;
+    document.querySelector('.approval-note').hidden = !!completed || disposition;
     list.replaceChildren();
     el('errorDetails').hidden = !failed;
     el('errorDetailsBody').textContent = failed ? displayValue(currentRecord.Promotion_Error) : '';
 
     let tone = 'info', title = 'Select a Resource submission.', next = '';
     if (currentRecord) {
-      setReviewLocked(!!completed || !!approved || !!partial || promotionInProgress, action === 'No change');
+      setReviewLocked(!!completed || !!approved || !!partial || held || promotionInProgress, action === 'No change');
       const when = formatApprovalTime(currentRecord.Approved_On);
       el('approvalStatus').textContent = approved
         ? 'Approved by ' + (displayValue(currentRecord.Approved_By) || 'recorded approver') +
@@ -975,7 +993,13 @@
         : completed ? 'This submission is read-only.' : 'Human approval has not been recorded.';
 
       // Completion is a historical outcome, not a fresh readiness check.
-      if (successful) {
+      if ((completed || held) && disposition && history.length) {
+        tone = held ? 'warning' : action === 'Reject' ? 'info' : 'success';
+        title = held ? '⚠ Verification required — review on hold' : action === 'Reject' ? 'ℹ Submission rejected' : '✓ Review completed — no changes needed';
+        next = held ? 'Complete the recorded follow-up, then click Resume review. No Resource was changed.' : 'The decision and reason are recorded. No Resource was changed. No further action is needed for this submission.';
+        el('completedActions').hidden = true;
+        setSaveStatus(held ? 'On hold pending verification.' : 'Completed. This submission is read-only.');
+      } else if (successful) {
         tone = 'success'; title = currentRecord.Resource_Action === 'Create' ? '✓ Resource created successfully' : '✓ Update completed successfully';
         next = 'The approved changes were applied to Resource ' +
           (displayValue(currentResource && currentResource.Resource_ID) || '(see audit record)') +
@@ -1001,7 +1025,13 @@
           status !== 'Ready to Promote' || isDirty || !result.ready ||
           (action === 'Create' ? !!currentResource || !draft || draft.version !== '9A.4' : action !== 'Update' || !currentResource || !hasBaseline);
 
-        if (promotionInProgress) {
+        if (disposition && !failed) {
+          buttons.forEach(button => button.disabled = true);
+          el('finalizeDisposition').disabled = promotionInProgress || approved || isDirty || !result.ready;
+          title = result.ready ? '✓ Decision ready to record' : '⚠ Complete the decision details';
+          tone = result.ready ? 'info' : 'warning';
+          next = approved ? 'Reopen the approved review before changing its decision.' : 'Save the reason and reviewer, then click Record decision. No Resource will be changed.';
+        } else if (promotionInProgress) {
           title = partial ? 'ℹ Checking the existing creation for recovery' : 'ℹ Checking and applying the approved changes';
           next = 'Please wait for the result before taking another action.';
         } else if (stale && !failed) {
@@ -1019,7 +1049,7 @@
           next = 'Check the final values, then click Save Resource Review Draft.';
         } else if (action === 'Update' && currentResource && !changed.length) {
           title = 'ℹ No changes needed';
-          next = 'The reviewed values match the knowledge base. Nothing needs updating. Leave this submission unpromoted; closing without changes is not available yet.';
+          next = 'The reviewed values match the knowledge base. Nothing needs updating. Select No change, enter a reason and reviewer, then save and record the decision.';
           list.replaceChildren();
         } else if (!['Update', 'Create'].includes(action)) {
           title = 'ℹ This action cannot be completed here yet';
@@ -1083,6 +1113,7 @@
   async function markReadyToPromote() {
     if (!currentRecord || !currentRecord.id) return;
 
+    if (isDisposition(getControl('resourceAction'))) return;
     const result = validateReadiness();
     if (!result.ready || isDirty) {
       setSaveStatus('Cannot mark ready: save the draft and resolve all blocking readiness items.', 'error');
@@ -1110,6 +1141,7 @@
   async function recordHumanApproval() {
     if (!currentRecord || !currentRecord.id) return;
 
+    if (isDisposition(getControl('resourceAction'))) return;
     const result = validateReadiness();
     if (!result.ready ||
         displayValue(currentRecord.Review_Status) !== 'Ready to Promote' ||
@@ -1195,6 +1227,58 @@
       console.error(err);
       setSaveStatus('Reopen failed: ' + (err && err.message ? err.message : String(err)), 'error');
     }
+  }
+
+
+  function isDisposition(action) {
+    return ['No change', 'Reject', 'Verification required'].includes(action);
+  }
+
+  function dispositionPlan(ctx, resume = false) {
+    const source = ctx.source, draft = parseDraft(source.Resource_Review_Draft);
+    if (boolValue(source.Promotion_Approved) || ['Partial','Failed','Success'].includes(source.Promotion_Result)) throw new Error('Resolve the existing promotion outcome or approval before recording a decision.');
+    if (resume ? source.Review_Status !== 'Verification Required' : !['New','In Review','Ready to Promote'].includes(source.Review_Status)) throw new Error('The review status changed. Reload before continuing.');
+    if (!draft || !isDisposition(draft.action) || source.Resource_Action !== draft.action || !hasValue(draft.decision_reason) || !hasValue(draft.decision_reviewer)) throw new Error('Save a decision, reason, and reviewer before continuing.');
+    if (resume && draft.action !== 'Verification required') throw new Error('Only a verification hold can be resumed.');
+    const resource = ctx.resources.find(r => r.id === refRowId(source.Existing_Resource));
+    if (!resume && draft.action === 'No change' && (!resource || !draft.baseline || !baselineMatchesLive(draft.baseline, resource, FIELD_DEFS.map(d => d.key), ctx.providers))) throw new Error('The matched Resource changed or is missing. Review its current values and save again.');
+    if (ctx.logs.some(r => r.Source_Submission_ID === source.Submission_ID && r.Entity_Type === 'Resource')) throw new Error('A promotion audit already exists. Inspect that outcome before continuing.');
+    return {draft, snapshot: JSON.stringify([source, resource || null])};
+  }
+
+  async function finalizeDisposition(resume = false) {
+    if (!currentRecord || promotionInProgress || isDirty) return;
+    const sourceId = currentRecord.id;
+    promotionInProgress = true; creatingResource = true; updateReadiness();
+    try {
+      let ctx = await createContext(sourceId), plan = dispositionPlan(ctx, resume);
+      const snapshot = plan.snapshot;
+      const target = resume ? 'In Review' : plan.draft.action === 'Verification required' ? 'Verification Required' : 'Completed';
+      if (!window.confirm((resume ? 'Resume this review?' : 'Record decision: ' + plan.draft.action + '?') + '\n\n' + ctx.source.Submission_ID + '\nReason: ' + plan.draft.decision_reason + '\nReviewer: ' + plan.draft.decision_reviewer + '\n\nNo canonical Resource will be changed.')) return;
+      ctx = await createContext(sourceId); plan = dispositionPlan(ctx, resume);
+      if (snapshot !== plan.snapshot) throw new Error('The review or Resource changed during confirmation. Reload and review again.');
+      const draft = {...plan.draft, decision_history: [...(plan.draft.decision_history || []), {
+        event: resume ? 'Resume review' : plan.draft.action, reason: plan.draft.decision_reason,
+        reviewer: plan.draft.decision_reviewer, recorded_on: new Date().toISOString(), status: target,
+        canonical_row_id: refRowId(ctx.source.Existing_Resource), implementation_version: '9A.5'
+      }]};
+      await grist.docApi.applyUserActions([['UpdateRecord','Resource_Submissions',sourceId,{
+        Review_Status: target, Resource_Review_Draft: JSON.stringify(draft)
+      }]]);
+    } catch (err) { window.alert('Decision was not confirmed. Reload and inspect the saved review before retrying. ' + (err.message || String(err))); }
+    finally {
+      promotionInProgress = false; creatingResource = false;
+      const selected = pendingResourceSelection || {id:sourceId}; pendingResourceSelection = null;
+      await render(selected);
+    }
+  }
+
+  function showDispositionHistory() {
+    const history = (parseDraft(currentRecord && currentRecord.Resource_Review_Draft) || {}).decision_history || [];
+    document.getElementById('recordDetails').hidden = false;
+    document.getElementById('recordDetails').open = true;
+    document.getElementById('recordDetailsTitle').textContent = 'Decision history (read-only)';
+    document.getElementById('recordDetailsBody').textContent = history.map(h => h.event + '\nReason: ' + h.reason + '\nReviewer: ' + h.reviewer + '\nRecorded: ' + formatApprovalTime(h.recorded_on) + '\nStatus: ' + h.status).join('\n\n');
   }
 
   function createIssues(fields, providersById) {
@@ -1661,6 +1745,7 @@
       return;
     }
 
+    if (currentRecord.Review_Status === 'Verification Required') { setSaveStatus('Click Resume review before editing.'); return; }
     if (currentRecord.Promotion_Result === 'Partial') {
       setSaveStatus('Partial creation is locked pending inspection of the Resource and audit record.', 'error');
       return;
@@ -1692,7 +1777,10 @@
 
     try {
       const ctx = await fetchContext(currentRecord);
+      if (boolValue(ctx.raw.Promotion_Approved) || ['Completed','Verification Required'].includes(ctx.raw.Review_Status) || ['Partial','Failed','Success'].includes(ctx.raw.Promotion_Result)) throw new Error('The saved review is locked or has a promotion outcome. Reload before editing.');
+      currentRecord = ctx.raw;
       currentResource = ctx.resource;
+      window.__resourceProvidersById = ctx.providersById;
       if (action === 'No change' && currentResource) {
         syncNoChangeToCanonical(ctx.providersById);
       }
@@ -1750,6 +1838,10 @@
     }
   });
 
+  ['dispositionReason','dispositionReviewer'].forEach(id => document.getElementById(id).addEventListener('input', markDirty));
+  document.getElementById('finalizeDisposition').addEventListener('click', () => finalizeDisposition());
+  document.getElementById('resumeDisposition').addEventListener('click', () => finalizeDisposition(true));
+  document.getElementById('viewDisposition').addEventListener('click', showDispositionHistory);
   document.getElementById('recoverPartial').addEventListener('click', recoverPartialCreation);
   document.getElementById('viewResource').addEventListener('click', () => showCompletedDetails('resource'));
   document.getElementById('viewAudit').addEventListener('click', () => showCompletedDetails('audit'));
