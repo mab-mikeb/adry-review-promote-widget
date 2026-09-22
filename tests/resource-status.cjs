@@ -6,6 +6,7 @@ function node(){return {textContent:'',value:'',hidden:false,disabled:false,data
 const el=id=>{if(!nodes.has(id))nodes.set(id,node());return nodes.get(id)};
 const ctx=vm.createContext({console,Intl,Date,Map,document:{getElementById:el,querySelector:el,querySelectorAll:()=>[],createElement:node},window:{},grist:{ready(){},onRecord(){},docApi:{fetchTable:async()=>({id:[]})}}});
 vm.runInContext(script,ctx);
+vm.runInContext("resourceSchema = new Map(FIELD_DEFS.map(d => [d.key,{colId:d.key,type:'Text',isFormula:false}]));",ctx);
 function run(code){return vm.runInContext(code,ctx)}
 function state(opts={}){
 ctx.opts=opts;
