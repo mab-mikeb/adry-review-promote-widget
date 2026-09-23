@@ -243,7 +243,7 @@
 <div class="shell">
   <div class="header">
     <h1>Project ADry — Resource Review & Promote</h1>
-    <p>Phase 9A.5 · Resource review dispositions</p>
+    <p>Phase 9A.5a · Resource draft safeguards</p>
   </div>
 
   <div id="waiting" class="waiting">Select a resource submission in Grist.</div>
@@ -627,6 +627,11 @@
     return Number.isNaN(parsed.getTime()) ? null : parsed.getTime() / 1000;
   }
 
+  function draftTargetChanged(draft, resource) {
+    return !!draft && !!draft.fields &&
+      Number(draft.baseline && draft.baseline.__row_id || 0) !== Number(resource && resource.id || 0);
+  }
+
   function buildRows(record, resource, providersById, draftFields) {
     const tbody = document.getElementById('resourceRows');
     tbody.innerHTML = '';
@@ -862,7 +867,11 @@
     window.__resourceProvidersById = ctx.providersById;
 
     const draft = parseDraft(currentRecord.Resource_Review_Draft) || {};
-    const draftFields = draft.fields || {};
+    const historical = boolValue(currentRecord.Promotion_Approved) ||
+      ['Completed', 'Verification Required'].includes(currentRecord.Review_Status) ||
+      ['Partial', 'Failed', 'Success'].includes(currentRecord.Promotion_Result);
+    const rebuild = !historical && draftTargetChanged(draft, currentResource);
+    const draftFields = rebuild ? {} : draft.fields || {};
     setControl('dispositionReason', draft.decision_reason || '');
     setControl('dispositionReviewer', draft.decision_reviewer || '');
 
@@ -889,7 +898,7 @@
     const completed = displayValue(currentRecord.Review_Status) === 'Completed';
     setReviewLocked(approved || completed, action === 'No change');
 
-    isDirty = false;
+    isDirty = rebuild;
     if (completed) {
       setSaveStatus(
         'This Resource submission is already Completed and is locked as historical workflow evidence.',
@@ -902,6 +911,8 @@
         'Existing Resource is matched but Resource Action is Create. Do not reuse this row for update QA; use a fresh submission and choose Update.',
         'error'
       );
+    } else if (rebuild) {
+      setSaveStatus('The linked Resource changed. Suggested / Final values were rebuilt from the submission and current KB. Re-enter any intended edits, review the values, then save the draft.', 'error');
     } else {
       setSaveStatus(
         draft.version ? 'Saved Resource review draft loaded.' : 'No saved Resource review draft yet.'
@@ -1610,6 +1621,8 @@
       const confirmed = window.confirm(
         'Promote this approved Resource update now?\n\n' +
         'Changed fields: ' + changedFields.join(', ') +
+        '\nResource: ' + displayValue(liveResource.Resource_ID) +
+        '\n\n' + changedFields.map(field => field + ': ' + displayValue(previous[field]) + ' → ' + (hasValue(applied[field]) ? displayValue(applied[field]) : '[CLEAR VALUE]')).join('\n') +
         '\n\nOnly these approved fields will be written.'
       );
       if (!confirmed) {
@@ -1778,6 +1791,10 @@
     try {
       const ctx = await fetchContext(currentRecord);
       if (boolValue(ctx.raw.Promotion_Approved) || ['Completed','Verification Required'].includes(ctx.raw.Review_Status) || ['Partial','Failed','Success'].includes(ctx.raw.Promotion_Result)) throw new Error('The saved review is locked or has a promotion outcome. Reload before editing.');
+      if (Number(currentResource && currentResource.id || 0) !== Number(ctx.resource && ctx.resource.id || 0)) {
+        await render(ctx.raw);
+        throw new Error('The linked Resource changed while saving. Review the rebuilt values and save again.');
+      }
       currentRecord = ctx.raw;
       currentResource = ctx.resource;
       window.__resourceProvidersById = ctx.providersById;
