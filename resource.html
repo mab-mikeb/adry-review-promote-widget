@@ -243,7 +243,7 @@
 <div class="shell">
   <div class="header">
     <h1>Project ADry — Resource Review & Promote</h1>
-    <p>Phase 9A.5a · Resource draft safeguards</p>
+    <p>Phase 9A.5b · Resource privacy field mapping</p>
   </div>
 
   <div id="waiting" class="waiting">Select a resource submission in Grist.</div>
@@ -366,7 +366,7 @@
     { key: 'Published_Cost', aliases: ['Published_Cost', 'Cost_Information'], type: 'text', rule: 'Cost information maps to published cost when appropriate.' },
     { key: 'Funding_Information', aliases: ['Funding_Information'], type: 'textarea', rule: 'Reviewer confirms funding wording before later promotion.' },
     { key: 'Eligibility_or_Requirements', aliases: ['Eligibility_or_Requirements', 'Eligibility_Information'], type: 'textarea', rule: 'Reviewer confirms eligibility / requirements wording.' },
-    { key: 'Privacy_Safety_Information', aliases: ['Privacy_Safety_Information'], type: 'textarea', rule: 'Reviewer-confirmed privacy / safety information.' },
+    { key: 'Privacy_Safety_Considerations', aliases: ['Privacy_Safety_Information', 'Privacy_Safety_Considerations'], type: 'textarea', rule: 'Reviewer-confirmed privacy / safety information.' },
     { key: 'Website', aliases: ['Website', 'Resource_URL'], type: 'text', rule: 'Submission URL if supplied; otherwise preserve current.' },
     { key: 'Resource_Status', aliases: ['Resource_Status'], type: 'text', rule: 'Preserve current for matched resource unless reviewer changes it.' },
     { key: 'Information_Source', aliases: ['Information_Source'], type: 'text', rule: 'Existing: preserve current by default. New: Provider submitted unless changed.' },
@@ -627,6 +627,18 @@
     return Number.isNaN(parsed.getTime()) ? null : parsed.getTime() / 1000;
   }
 
+  function legacyPrivacyDraft(draft) {
+    return !!draft && !!draft.fields &&
+      Object.prototype.hasOwnProperty.call(draft.fields, 'Privacy_Safety_Information') &&
+      !Object.prototype.hasOwnProperty.call(draft.fields, 'Privacy_Safety_Considerations');
+  }
+
+  function requireCurrentPrivacyMapping(draft, recovery = false) {
+    if (legacyPrivacyDraft(draft)) throw new Error(recovery
+      ? 'This partial creation uses the older privacy field mapping. Administrator review is required before recovery; no additional Resource will be created.'
+      : 'This draft uses the older privacy field mapping. Reopen the review if approved, review the privacy/safety value, save, and approve again.');
+  }
+
   function draftTargetChanged(draft, resource) {
     return !!draft && !!draft.fields &&
       Number(draft.baseline && draft.baseline.__row_id || 0) !== Number(resource && resource.id || 0);
@@ -871,7 +883,12 @@
       ['Completed', 'Verification Required'].includes(currentRecord.Review_Status) ||
       ['Partial', 'Failed', 'Success'].includes(currentRecord.Promotion_Result);
     const rebuild = !historical && draftTargetChanged(draft, currentResource);
-    const draftFields = rebuild ? {} : draft.fields || {};
+    const privacyRefresh = !historical && legacyPrivacyDraft(draft);
+    const draftFields = rebuild ? {} : { ...(draft.fields || {}) };
+    // Preserve an entered legacy value; an old blank must not erase current KB data.
+    if (!rebuild && privacyRefresh && hasValue(draftFields.Privacy_Safety_Information)) {
+      draftFields.Privacy_Safety_Considerations = draftFields.Privacy_Safety_Information;
+    }
     setControl('dispositionReason', draft.decision_reason || '');
     setControl('dispositionReviewer', draft.decision_reviewer || '');
 
@@ -898,7 +915,7 @@
     const completed = displayValue(currentRecord.Review_Status) === 'Completed';
     setReviewLocked(approved || completed, action === 'No change');
 
-    isDirty = rebuild;
+    isDirty = rebuild || privacyRefresh;
     if (completed) {
       setSaveStatus(
         'This Resource submission is already Completed and is locked as historical workflow evidence.',
@@ -913,6 +930,8 @@
       );
     } else if (rebuild) {
       setSaveStatus('The linked Resource changed. Suggested / Final values were rebuilt from the submission and current KB. Re-enter any intended edits, review the values, then save the draft.', 'error');
+    } else if (privacyRefresh) {
+      setSaveStatus('The privacy/safety mapping changed. Review its Suggested / Final value and save the draft before approval.', 'error');
     } else {
       setSaveStatus(
         draft.version ? 'Saved Resource review draft loaded.' : 'No saved Resource review draft yet.'
@@ -1343,6 +1362,7 @@
     if (!hasValue(source.Approved_By) || !hasValue(source.Approved_By_Email) || !hasValue(source.Approved_On)) throw new Error('Approval stamps are incomplete. Reopen and approve again.');
     const draft = parseDraft(source.Resource_Review_Draft);
     if (!draft || draft.version !== '9A.4' || draft.action !== 'Create' || !draft.fields) throw new Error('Reopen this review, save it under Phase 9A.4, and approve again.');
+    requireCurrentPrivacyMapping(draft);
     const issues = createIssues(draft.fields, ctx.providers);
     if (issues.length) throw new Error(issues.join(' '));
     const duplicate = findCreateDuplicate(draft.fields, ctx.resources, ctx.providers);
@@ -1384,6 +1404,7 @@
         !boolValue(source.Promotion_Approved) || source.Review_Status !== 'Ready to Promote') throw new Error('This is not an approved partial creation.');
     const draft = parseDraft(source.Resource_Review_Draft);
     if (!draft || draft.action !== 'Create' || !draft.fields || !hasValue(source.Approved_By) || !hasValue(source.Approved_On) || !hasValue(source.Approved_By_Email)) throw new Error('Saved approval evidence is incomplete.');
+    requireCurrentPrivacyMapping(draft, true);
     const resource = ctx.resources.find(r => r.id === refRowId(source.Existing_Resource));
     if (!resource || !hasValue(resource.Resource_ID)) throw new Error('Linked Resource could not be verified.');
     if (ctx.resources.some(r => r.id !== resource.id && r.Resource_ID === resource.Resource_ID)) throw new Error('Resource ID is not unique.');
@@ -1580,6 +1601,7 @@
 
       const draft = parseDraft(rawSubmission.Resource_Review_Draft);
       if (!draft || !draft.fields) throw new Error('Saved Resource review draft is required.');
+      requireCurrentPrivacyMapping(draft);
       if (!draft.baseline) {
         throw new Error('This approved draft predates Phase 9A.3 baseline protection. Reopen, save the draft again, and re-approve before promotion.');
       }
