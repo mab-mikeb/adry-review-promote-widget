@@ -448,7 +448,7 @@
 <div class="shell">
   <div class="header">
     <h1>Project ADry — Review & Promote</h1>
-    <p>Phase 8D.4 · Provider/Program final regression candidate</p>
+    <p>Phase 8D.5 · Funding-aware Provider/Program review & promotion</p>
   </div>
 
   <div id="waiting" class="waiting">
@@ -751,10 +751,108 @@
                   <option>Education/Training</option>
                   <option>Respite</option>
                   <option>Community Participation</option>
+                  <option>Funding / Financial Assistance</option>
+                  <option>Disability Support</option>
+                  <option>Recreation / Community Participation</option>
+                  <option>Transportation</option>
+                  <option>Accessibility / Equipment</option>
+                  <option>Respite / Caregiver</option>
+                  <option>Housing</option>
+                  <option>Health / Clinical</option>
                   <option>Other</option>
                 </select>
               </td>
-              <td><span class="rule-badge">Review</span><br><span class="muted">Preserve current unless reviewer changes it</span></td>
+              <td><span class="rule-badge">Review</span><br><span class="muted">New Program: use submitted category. Existing Program: preserve current unless reviewer changes it.</span></td>
+            </tr>
+            <tr>
+              <td>Funding_Type</td>
+              <td id="g_cur_fundingtype"></td>
+              <td id="g_sub_fundingtype"></td>
+              <td>
+                <select id="g_final_fundingtype">
+                  <option value="">Not a funding program / blank</option>
+                  <option>Tax Credit</option>
+                  <option>Income Benefit</option>
+                  <option>Grant</option>
+                  <option>Subsidy</option>
+                  <option>Reimbursement</option>
+                  <option>Equipment Funding</option>
+                  <option>Fee Assistance</option>
+                  <option>Savings Incentive</option>
+                  <option>Service Funding</option>
+                  <option>Direct Funding</option>
+                  <option>Other</option>
+                </select>
+              </td>
+              <td><span class="rule-badge">Review</span><br><span class="muted">A non-blank Funding Type marks this as a funding/benefit Program.</span></td>
+            </tr>
+            <tr>
+              <td>Funding_Maximum</td>
+              <td id="g_cur_fundingmaximum"></td>
+              <td id="g_sub_fundingmaximum"></td>
+              <td><input id="g_final_fundingmaximum" type="text"></td>
+              <td><span class="rule-badge">Review</span><br><span class="muted">Text is intentional so ranges, percentages, and benefit years are preserved.</span></td>
+            </tr>
+            <tr>
+              <td>Application_Status</td>
+              <td id="g_cur_applicationstatus"></td>
+              <td id="g_sub_applicationstatus"></td>
+              <td>
+                <select id="g_final_applicationstatus">
+                  <option value="">Select...</option>
+                  <option>Ongoing</option>
+                  <option>Open</option>
+                  <option>Closed</option>
+                  <option>Recurring Window</option>
+                  <option>Time-Limited</option>
+                  <option>Waitlist</option>
+                  <option>Unknown</option>
+                </select>
+              </td>
+              <td><span class="rule-badge">Review</span><br><span class="muted">Current application/access status.</span></td>
+            </tr>
+            <tr>
+              <td>Application_Deadline</td>
+              <td id="g_cur_applicationdeadline"></td>
+              <td id="g_sub_applicationdeadline"></td>
+              <td><input id="g_final_applicationdeadline" type="text"></td>
+              <td><span class="rule-badge">Review</span><br><span class="muted">Free text supports recurring windows and conditional deadlines.</span></td>
+            </tr>
+            <tr>
+              <td>Means_Tested</td>
+              <td id="g_cur_meanstested"></td>
+              <td id="g_sub_meanstested"></td>
+              <td>
+                <select id="g_final_meanstested">
+                  <option value="">Select...</option>
+                  <option>Yes</option>
+                  <option>No</option>
+                  <option>Unknown</option>
+                </select>
+              </td>
+              <td><span class="rule-badge">Review</span><br><span class="muted">Unknown is distinct from No.</span></td>
+            </tr>
+            <tr>
+              <td>Reimbursement_Based</td>
+              <td id="g_cur_reimbursement"></td>
+              <td id="g_sub_reimbursement"></td>
+              <td>
+                <select id="g_final_reimbursement">
+                  <option value="">Select...</option>
+                  <option>Yes</option>
+                  <option>No</option>
+                  <option>Mixed</option>
+                  <option>Unknown</option>
+                </select>
+              </td>
+              <td><span class="rule-badge">Review</span><br><span class="muted">Whether the participant typically pays first and is reimbursed.</span></td>
+            </tr>
+            <tr>
+              <td>Last_Verified_On</td>
+              <td id="g_cur_lastverified"></td>
+              <td id="g_sub_lastverified"></td>
+              <td><input id="g_final_lastverified" type="date"></td>
+              <td><span class="rule-badge">Review</span><br><span class="muted">Date the funding/program information was last verified.</span></td>
             </tr>
             <tr>
               <td>Age_Band</td>
@@ -812,6 +910,15 @@
 
           <div class="label">Existing Program match</div>
           <div class="value" id="Existing_Program"></div>
+
+          <div class="label">Submission source</div>
+          <div class="value" id="Submission_Source"></div>
+
+          <div class="label">Research run</div>
+          <div class="value" id="Research_Run_ID"></div>
+
+          <div class="label">Research source notes</div>
+          <div class="value" id="Research_Source_Notes"></div>
         </div>
       </div>
 
@@ -902,7 +1009,7 @@
       <div id="approvalStatus" class="approval-status"></div>
       <div id="promotionStatus" class="approval-status"></div>
       <div class="approval-note">
-        Phase 8D.4 is the Provider/Program regression candidate. It retains create, update, no-change, reject, verification, approval/reopen, duplicate protection, recovery, and audit behavior while polishing completed-disposition messaging for final QA.
+        Phase 8D.5 extends the governed Provider/Program workflow with structured funding fields and existing-Provider/new-Program promotion while retaining human approval, duplicate protection, recovery, and audit behavior.
       </div>
     </div>
 
@@ -1041,6 +1148,13 @@
     setControl('g_final_source', displayValue(program.Information_Source) || '');
     setControl('g_final_confidence', displayValue(program.Confidence_Status) || '');
     setControl('g_final_category', displayValue(program.Program_Category) || '');
+    setControl('g_final_fundingtype', displayValue(program.Funding_Type) || '');
+    setControl('g_final_fundingmaximum', displayValue(program.Funding_Maximum) || '');
+    setControl('g_final_applicationstatus', displayValue(program.Application_Status) || '');
+    setControl('g_final_applicationdeadline', displayValue(program.Application_Deadline) || '');
+    setControl('g_final_meanstested', displayValue(program.Means_Tested) || '');
+    setControl('g_final_reimbursement', displayValue(program.Reimbursement_Based) || '');
+    setControl('g_final_lastverified', dateInputValue(program.Last_Verified_On));
     setChoiceList('g_final_age', normalizeChoiceListValue(program.Age_Band));
     setControl(
       'g_final_municipality',
@@ -1206,6 +1320,11 @@
     return hasValue(submittedValue) ? displayValue(submittedValue) : (displayValue(currentValue) || '');
   }
 
+  function reviewDefault(submittedValue, currentValue, hasCanonical) {
+    if (hasCanonical && hasValue(currentValue)) return displayValue(currentValue) || '';
+    return hasValue(submittedValue) ? displayValue(submittedValue) : (displayValue(currentValue) || '');
+  }
+
   function locationLabel(value, locationsById) {
     const rowId = refRowId(value);
     if (!rowId) return displayValue(value) || '';
@@ -1233,6 +1352,7 @@
     const programId = rawSubmission ? refRowId(rawSubmission.Existing_Program) : null;
 
     return {
+      submission: rawSubmission,
       provider: providerId ? (providers.find(row => row.id === providerId) || null) : null,
       program: programId ? (programs.find(row => row.id === programId) || null) : null,
       locationsById
@@ -1324,6 +1444,38 @@
     }
     const parsed = Date.parse(displayValue(value) || '');
     return Number.isFinite(parsed) ? parsed / 1000 : null;
+  }
+
+  function dateInputValue(value) {
+    if (value === null || value === undefined || value === '') return '';
+    let millis = null;
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      millis = value * 1000;
+    } else if (Array.isArray(value) && value[0] === 'D' && Number.isFinite(Number(value[1]))) {
+      millis = Number(value[1]) * 1000;
+    } else {
+      const text = displayValue(value) || '';
+      if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text;
+      const parsed = Date.parse(text);
+      if (Number.isFinite(parsed)) millis = parsed;
+    }
+    return millis === null ? '' : new Date(millis).toISOString().slice(0, 10);
+  }
+
+  function dateOnlySeconds(value, label) {
+    if (!hasValue(value)) return null;
+    if (typeof value === 'number' && Number.isFinite(value)) return value;
+    const text = dateInputValue(value);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) {
+      throw new Error((label || 'Date') + ' must be a valid YYYY-MM-DD date.');
+    }
+    const parts = text.split('-').map(Number);
+    const millis = Date.UTC(parts[0], parts[1] - 1, parts[2]);
+    const check = new Date(millis).toISOString().slice(0, 10);
+    if (check !== text) {
+      throw new Error((label || 'Date') + ' must be a valid calendar date.');
+    }
+    return millis / 1000;
   }
 
   function createdRowId(result) {
@@ -1572,6 +1724,7 @@
     const programAction = getControl('programAction');
     const providerMatched = hasValue(currentRecord.Existing_Provider);
     const programMatched = hasValue(currentRecord.Existing_Program);
+    const fundingProgram = hasValue(getControl('g_final_fundingtype')) || hasValue(currentRecord.Funding_Type);
 
     const providerDraftSaved = !!parseDraft(currentRecord.Provider_Review_Draft);
     const programDraftSaved = !!parseDraft(currentRecord.Program_Review_Draft);
@@ -1651,7 +1804,11 @@
       add(nonBlank(getControl('p_final_name')) ? 'ok' : 'block', 'New Provider has a Provider Name.');
       add(nonBlank(getControl('p_final_website')) ? 'ok' : 'block', 'New Provider has a Website.');
       add(nonBlank(getControl('p_final_orgtype')) ? 'ok' : 'block', 'New Provider has an Organization Type.');
-      add(nonBlank(getControl('p_final_municipality')) ? 'ok' : 'block', 'New Provider has a Primary Municipality.');
+      if (!fundingProgram) {
+        add(nonBlank(getControl('p_final_municipality')) ? 'ok' : 'block', 'New Provider has a Primary Municipality.');
+      } else {
+        add('ok', 'Funding administrator may be national/provincial; Provider municipality is optional.');
+      }
     }
 
     if (providerAction === 'Update') {
@@ -1662,9 +1819,15 @@
       add(nonBlank(getControl('g_final_name')) ? 'ok' : 'block', 'New Program has a Program Name.');
       add(nonBlank(getControl('g_final_summary')) ? 'ok' : 'block', 'New Program has a Program Summary.');
       add(nonBlank(getControl('g_final_category')) ? 'ok' : 'block', 'New Program has a Program Category.');
-      add(nonBlank(getControl('g_final_delivery')) ? 'ok' : 'block', 'New Program has a Delivery Mode.');
-      add(getChoiceList('g_final_age').length > 0 ? 'ok' : 'block', 'New Program has at least one Age Band.');
-      add(nonBlank(getControl('g_final_municipality')) ? 'ok' : 'block', 'New Program has a Primary Municipality for later Locations resolution.');
+      if (fundingProgram) {
+        add(nonBlank(getControl('g_final_fundingtype')) ? 'ok' : 'block', 'Funding Program has a Funding Type.');
+        add(nonBlank(getControl('g_final_applicationstatus')) ? 'ok' : 'block', 'Funding Program has an Application Status.');
+        add(nonBlank(getControl('g_final_lastverified')) ? 'ok' : 'block', 'Funding Program has a Last Verified date.');
+      } else {
+        add(nonBlank(getControl('g_final_delivery')) ? 'ok' : 'block', 'New Program has a Delivery Mode.');
+        add(getChoiceList('g_final_age').length > 0 ? 'ok' : 'block', 'New Program has at least one Age Band.');
+        add(nonBlank(getControl('g_final_municipality')) ? 'ok' : 'block', 'New Program has a Primary Municipality for later Locations resolution.');
+      }
     }
 
     if (programAction === 'Update') {
@@ -2353,31 +2516,36 @@
       const providerName = requireText(p.Provider_Name, 'Provider Name');
       const providerWebsite = requireText(p.Website, 'Provider Website');
       const providerOrgType = requireText(p.Organization_Type, 'Provider Organization Type');
-      const providerMunicipalityText = requireText(p.Primary_Municipality, 'Provider Primary Municipality');
+      const fundingProgram = nonBlank(g.Funding_Type);
+      const providerMunicipalityText = fundingProgram
+        ? scalarCompare(p.Primary_Municipality)
+        : requireText(p.Primary_Municipality, 'Provider Primary Municipality');
 
       const programName = requireText(g.Program_Name, 'Program Name');
       const programSummary = requireText(g.Program_Summary, 'Program Summary');
       const programCategory = requireText(g.Program_Category, 'Program Category');
-      const programDelivery = requireText(g.Delivery_Mode, 'Program Delivery Mode');
+      const programDelivery = fundingProgram
+        ? scalarCompare(g.Delivery_Mode)
+        : requireText(g.Delivery_Mode, 'Program Delivery Mode');
       const ageBands = normalizeChoiceListValue(g.Age_Band);
-      if (!ageBands.length) throw new Error('Program Age Band is required.');
-      const programMunicipalityText = requireText(g.Primary_Municipality, 'Program Primary Municipality');
+      if (!fundingProgram && !ageBands.length) throw new Error('Program Age Band is required.');
+      const programMunicipalityText = fundingProgram
+        ? scalarCompare(g.Primary_Municipality)
+        : requireText(g.Primary_Municipality, 'Program Primary Municipality');
 
-      const providerMunicipalityId = resolveLocationRowId(
-        providerMunicipalityText,
-        locations,
-        'Provider Primary Municipality'
-      );
-      const providerMunicipalityCanonicalText = resolveLocationText(
-        providerMunicipalityText,
-        locations,
-        'Provider Primary Municipality'
-      );
-      const programMunicipalityId = resolveLocationRowId(
-        programMunicipalityText,
-        locations,
-        'Program Primary Municipality'
-      );
+      const providerMunicipalityCanonicalText = providerMunicipalityText
+        ? resolveLocationText(providerMunicipalityText, locations, 'Provider Primary Municipality')
+        : '';
+      const programMunicipalityId = programMunicipalityText
+        ? resolveLocationRowId(programMunicipalityText, locations, 'Program Primary Municipality')
+        : null;
+
+      if (fundingProgram) {
+        requireText(g.Application_Status, 'Funding Program Application Status');
+        if (!dateInputValue(g.Last_Verified_On)) {
+          throw new Error('Funding Program Last Verified date is required.');
+        }
+      }
 
       const providerNameKey = normalizeKey(providerName);
       const providerUrlKey = normalizeUrl(providerWebsite);
@@ -2436,11 +2604,11 @@
         Provider_Name: providerName,
         Organization_Type: providerOrgType,
         Website: providerWebsite,
-        Primary_Municipality: providerMunicipalityCanonicalText,
         Information_Source: requireText(p.Information_Source, 'Provider Information Source'),
         Confidence_Status: requireText(p.Confidence_Status, 'Provider Confidence Status'),
         Provider_Participation_Level: requireText(p.Provider_Participation_Level, 'Provider Participation Level')
       };
+      if (providerMunicipalityCanonicalText) providerFields.Primary_Municipality = providerMunicipalityCanonicalText;
       if (nonBlank(p.Primary_Email)) providerFields.Primary_Email = String(p.Primary_Email).trim();
 
       if (resumeProvider) {
@@ -2569,19 +2737,26 @@
         Provider: providerRowId,
         Program_Name: programName,
         Program_Summary: programSummary,
-        Delivery_Mode: choiceListCell([programDelivery]),
         Program_Category: programCategory,
-        Age_Band: choiceListCell(ageBands),
-        Primary_Municipality: programMunicipalityId,
         Information_Source: requireText(g.Information_Source, 'Program Information Source'),
         Confidence_Status: requireText(g.Confidence_Status, 'Program Confidence Status')
       };
 
+      if (programDelivery) programFields.Delivery_Mode = choiceListCell([programDelivery]);
+      if (ageBands.length) programFields.Age_Band = choiceListCell(ageBands);
+      if (programMunicipalityId) programFields.Primary_Municipality = programMunicipalityId;
       if (nonBlank(g.Program_URL)) programFields.Program_URL = String(g.Program_URL).trim();
       if (nonBlank(g.Days_Offered)) programFields.Days_Offered = choiceListCell(g.Days_Offered);
       if (nonBlank(g.Time_of_Day)) programFields.Time_of_Day = choiceListCell(g.Time_of_Day);
       if (nonBlank(g.Cost_Notes)) programFields.Cost_Notes = String(g.Cost_Notes).trim();
       if (nonBlank(g.Cost_Basis)) programFields.Cost_Basis = String(g.Cost_Basis).trim();
+      if (nonBlank(g.Funding_Type)) programFields.Funding_Type = String(g.Funding_Type).trim();
+      if (nonBlank(g.Funding_Maximum)) programFields.Funding_Maximum = String(g.Funding_Maximum).trim();
+      if (nonBlank(g.Application_Status)) programFields.Application_Status = String(g.Application_Status).trim();
+      if (nonBlank(g.Application_Deadline)) programFields.Application_Deadline = String(g.Application_Deadline).trim();
+      if (nonBlank(g.Means_Tested)) programFields.Means_Tested = String(g.Means_Tested).trim();
+      if (nonBlank(g.Reimbursement_Based)) programFields.Reimbursement_Based = String(g.Reimbursement_Based).trim();
+      if (nonBlank(g.Last_Verified_On)) programFields.Last_Verified_On = dateOnlySeconds(g.Last_Verified_On, 'Last Verified On');
 
       const programCreated = await grist.getTable('Programs').create(
         { fields: programFields },
@@ -2603,9 +2778,9 @@
       const programCanonicalId = displayValue(programCanonical.Program_ID) || '';
       const programAuditValues = {
         ...programFields,
-        Provider_Canonical_ID: providerCanonicalId,
-        Primary_Municipality_Label: programMunicipalityText
+        Provider_Canonical_ID: providerCanonicalId
       };
+      if (programMunicipalityText) programAuditValues.Primary_Municipality_Label = programMunicipalityText;
 
       await grist.docApi.applyUserActions([
         ['UpdateRecord', 'Provider_Submissions', rawSubmission.id, {
@@ -2732,6 +2907,222 @@
     }
   }
 
+
+  async function promoteExistingProviderCreateProgram() {
+    if (!currentRecord || !currentRecord.id || promotionInProgress) return;
+
+    promotionInProgress = true;
+    updateReadiness();
+    setSaveStatus('Rechecking existing Provider and approved new Program before canonical write...');
+
+    let rawSubmission = null;
+    let programRowId = null;
+
+    try {
+      if (isDirty) throw new Error('The review has unsaved changes. Promotion is blocked.');
+
+      const [submissionRows, providerRows, programRows, locations] = await Promise.all([
+        fetchTableRows('Provider_Submissions'),
+        fetchTableRows('Providers'),
+        fetchTableRows('Programs'),
+        fetchTableRows('Locations')
+      ]);
+
+      rawSubmission = submissionRows.find(row => row.id === currentRecord.id);
+      if (!rawSubmission) throw new Error('The selected Provider_Submissions row could not be reloaded.');
+      if (!boolValue(rawSubmission.Promotion_Approved)) throw new Error('Promotion_Approved is not true on the source submission.');
+      if (displayValue(rawSubmission.Review_Status) !== 'Ready to Promote') throw new Error('Review_Status must be Ready to Promote.');
+      if (displayValue(rawSubmission.Provider_Action) !== 'No change' ||
+          displayValue(rawSubmission.Program_Action) !== 'Create') {
+        throw new Error('This path requires Provider Action = No change and Program Action = Create.');
+      }
+      if (!hasValue(rawSubmission.Approved_By) ||
+          !hasValue(rawSubmission.Approved_By_Email) ||
+          !hasValue(rawSubmission.Approved_On)) {
+        throw new Error('Approval stamps are incomplete.');
+      }
+      if (displayValue(rawSubmission.Promotion_Result) === 'Success' ||
+          displayValue(rawSubmission.Review_Status) === 'Completed') {
+        throw new Error('This submission has already been promoted.');
+      }
+
+      const providerRowId = refRowId(rawSubmission.Existing_Provider);
+      const existingProgramRowId = refRowId(rawSubmission.Existing_Program);
+      if (!providerRowId) throw new Error('Provider Action = No change requires an Existing_Provider reference.');
+      if (existingProgramRowId) throw new Error('Program Action = Create cannot be used when Existing_Program is already populated.');
+
+      const liveProvider = providerRows.find(row => row.id === providerRowId) || null;
+      if (!liveProvider) throw new Error('The matched existing Provider no longer exists.');
+
+      const providerDraft = parseDraft(rawSubmission.Provider_Review_Draft);
+      const programDraft = parseDraft(rawSubmission.Program_Review_Draft);
+      if (!providerDraft || !programDraft) throw new Error('Saved Provider and Program review drafts are required.');
+      if (providerDraft.action !== 'No change' || programDraft.action !== 'Create') {
+        throw new Error('Saved review draft actions no longer match the approved submission actions.');
+      }
+
+      const g = programDraft.fields || {};
+      const fundingProgram = nonBlank(g.Funding_Type);
+      const programName = requireText(g.Program_Name, 'Program Name');
+      const programSummary = requireText(g.Program_Summary, 'Program Summary');
+      const programCategory = requireText(g.Program_Category, 'Program Category');
+      const programDelivery = fundingProgram ? scalarCompare(g.Delivery_Mode) : requireText(g.Delivery_Mode, 'Program Delivery Mode');
+      const ageBands = normalizeChoiceListValue(g.Age_Band);
+      if (!fundingProgram && !ageBands.length) throw new Error('Program Age Band is required.');
+      const programMunicipalityText = fundingProgram
+        ? scalarCompare(g.Primary_Municipality)
+        : requireText(g.Primary_Municipality, 'Program Primary Municipality');
+      const programMunicipalityId = programMunicipalityText
+        ? resolveLocationRowId(programMunicipalityText, locations, 'Program Primary Municipality')
+        : null;
+
+      if (fundingProgram) {
+        requireText(g.Application_Status, 'Funding Program Application Status');
+        if (!dateInputValue(g.Last_Verified_On)) throw new Error('Funding Program Last Verified date is required.');
+      }
+
+      const programUrlKey = normalizeUrl(g.Program_URL);
+      const duplicateProgram = programRows.find(row => {
+        const sameUrl = programUrlKey && normalizeUrl(row.Program_URL) === programUrlKey;
+        const sameName = normalizeKey(row.Program_Name) === normalizeKey(programName);
+        const sameProvider = refRowId(row.Provider) === providerRowId;
+        return sameUrl || (sameProvider && sameName);
+      });
+      if (duplicateProgram) {
+        throw new Error(
+          'Duplicate safeguard: a canonical Program already matches this provider/name or Program_URL (row ' +
+          duplicateProgram.id + '). Reconcile the existing row instead of creating another Program.'
+        );
+      }
+
+      const confirmed = window.confirm(
+        'Create this approved Program under the matched Provider?\n\n' +
+        'Provider: ' + (displayValue(liveProvider.Provider_Name) || 'Provider row ' + providerRowId) + '\n' +
+        'Program: ' + programName + '\n\n' +
+        'The Provider will not be modified. A new canonical Program and audit-log entry will be created.'
+      );
+      if (!confirmed) {
+        setSaveStatus('Promotion cancelled. No canonical records were created.');
+        return;
+      }
+
+      const programFields = {
+        Provider: providerRowId,
+        Program_Name: programName,
+        Program_Summary: programSummary,
+        Program_Category: programCategory,
+        Information_Source: requireText(g.Information_Source, 'Program Information Source'),
+        Confidence_Status: requireText(g.Confidence_Status, 'Program Confidence Status')
+      };
+      if (programDelivery) programFields.Delivery_Mode = choiceListCell([programDelivery]);
+      if (ageBands.length) programFields.Age_Band = choiceListCell(ageBands);
+      if (programMunicipalityId) programFields.Primary_Municipality = programMunicipalityId;
+      if (nonBlank(g.Program_URL)) programFields.Program_URL = String(g.Program_URL).trim();
+      if (nonBlank(g.Days_Offered)) programFields.Days_Offered = choiceListCell(g.Days_Offered);
+      if (nonBlank(g.Time_of_Day)) programFields.Time_of_Day = choiceListCell(g.Time_of_Day);
+      if (nonBlank(g.Cost_Notes)) programFields.Cost_Notes = String(g.Cost_Notes).trim();
+      if (nonBlank(g.Cost_Basis)) programFields.Cost_Basis = String(g.Cost_Basis).trim();
+      if (nonBlank(g.Funding_Type)) programFields.Funding_Type = String(g.Funding_Type).trim();
+      if (nonBlank(g.Funding_Maximum)) programFields.Funding_Maximum = String(g.Funding_Maximum).trim();
+      if (nonBlank(g.Application_Status)) programFields.Application_Status = String(g.Application_Status).trim();
+      if (nonBlank(g.Application_Deadline)) programFields.Application_Deadline = String(g.Application_Deadline).trim();
+      if (nonBlank(g.Means_Tested)) programFields.Means_Tested = String(g.Means_Tested).trim();
+      if (nonBlank(g.Reimbursement_Based)) programFields.Reimbursement_Based = String(g.Reimbursement_Based).trim();
+      if (nonBlank(g.Last_Verified_On)) programFields.Last_Verified_On = dateOnlySeconds(g.Last_Verified_On, 'Last Verified On');
+
+      const created = await grist.getTable('Programs').create(
+        { fields: programFields },
+        { parseStrings: false }
+      );
+      programRowId = createdRowId(created);
+      await grist.docApi.applyUserActions([
+        ['UpdateRecord', 'Programs', programRowId, programFields]
+      ]);
+
+      const programCanonical = await waitForCanonicalRow('Programs', programRowId, 'Program_ID');
+      if (!programCanonical || normalizeKey(programCanonical.Program_Name) !== normalizeKey(programName)) {
+        throw new Error('Program row was created but its approved field values were not persisted.');
+      }
+
+      const now = Date.now() / 1000;
+      const appliedBy =
+        displayValue(rawSubmission.Approved_By) ||
+        displayValue(rawSubmission.Approved_By_Email) ||
+        'Approved reviewer';
+      const providerCanonicalId = displayValue(liveProvider.Provider_ID) || '';
+      const programCanonicalId = displayValue(programCanonical.Program_ID) || '';
+      const auditValues = {
+        ...programFields,
+        Provider_Canonical_ID: providerCanonicalId
+      };
+      if (programMunicipalityText) auditValues.Primary_Municipality_Label = programMunicipalityText;
+
+      await grist.docApi.applyUserActions([
+        ['UpdateRecord', 'Provider_Submissions', rawSubmission.id, {
+          Existing_Program: programRowId,
+          Applied_By: appliedBy,
+          Applied_On: now,
+          Promotion_Result: 'Success',
+          Promotion_Error: '',
+          Review_Status: 'Completed'
+        }],
+        ['AddRecord', 'KB_Promotion_Log', null, {
+          Submission_Type: 'Provider Submission',
+          Source_Submission_ID: sourceSubmissionId(rawSubmission),
+          Entity_Type: 'Program',
+          Action: 'Create',
+          Canonical_ID: programCanonicalId,
+          Canonical_Row_ID: programRowId,
+          Approved_By: displayValue(rawSubmission.Approved_By) || '',
+          Approved_By_Email: displayValue(rawSubmission.Approved_By_Email) || '',
+          Approved_On: dateTimeSeconds(rawSubmission.Approved_On),
+          Applied_By: appliedBy,
+          Applied_On: now,
+          Result: 'Success',
+          Changed_Fields: Object.keys(programFields).join('\n'),
+          Previous_Values: '{}',
+          Applied_Values: JSON.stringify(auditValues),
+          Suggestion_Source: displayValue(programDraft.suggestion_source) || 'Rules',
+          Human_Decision: 'Approved',
+          Override_Reason: 'Existing Provider preserved; new Program created.',
+          Implementation_Version: '8D.5',
+          Error_Detail: ''
+        }]
+      ]);
+
+      currentRecord.Existing_Program = programRowId;
+      currentRecord.Applied_By = appliedBy;
+      currentRecord.Applied_On = now;
+      currentRecord.Promotion_Result = 'Success';
+      currentRecord.Promotion_Error = '';
+      currentRecord.Review_Status = 'Completed';
+      put('statusBadge', 'Status: Completed');
+      put('programMatchBadge', 'Program: matched');
+      setSaveStatus(
+        'Promotion complete: existing Provider preserved; ' +
+        (programCanonicalId || 'Program row ' + programRowId) +
+        ' created and audit logged.',
+        'success'
+      );
+    } catch (err) {
+      console.error('Existing Provider + Create Program promotion failed', err);
+      const message = err && err.message ? err.message : String(err);
+      if (rawSubmission) {
+        await recordPromotionFailure(rawSubmission, 'Program', message, Boolean(programRowId));
+      }
+      const failureMessage =
+        'Program promotion stopped: ' + message +
+        (programRowId
+          ? ' A canonical Program may already exist; do not manually retry until the partial state is reviewed.'
+          : '');
+      setSaveStatus(failureMessage, 'error');
+      window.alert(failureMessage);
+    } finally {
+      promotionInProgress = false;
+      updateReadiness();
+    }
+  }
+
   async function promoteMatchedUpdateSubmission() {
     if (!currentRecord || !currentRecord.id || promotionInProgress) return;
 
@@ -2826,29 +3217,53 @@
         Primary_Email: scalarCompare(p.Primary_Email)
       };
 
+      const fundingProgram = nonBlank(g.Funding_Type) || hasValue(liveProgram.Funding_Type);
       const programDesired = {
         Provider: providerRowId,
         Program_Name: requireText(g.Program_Name, 'Program Name'),
         Program_URL: scalarCompare(g.Program_URL),
         Program_Summary: requireText(g.Program_Summary, 'Program Summary'),
-        Delivery_Mode: choiceListCell([requireText(g.Delivery_Mode, 'Program Delivery Mode')]),
         Days_Offered: choiceListCell(g.Days_Offered),
         Time_of_Day: choiceListCell(g.Time_of_Day),
         Cost_Notes: scalarCompare(g.Cost_Notes),
         Information_Source: requireText(g.Information_Source, 'Program Information Source'),
         Confidence_Status: requireText(g.Confidence_Status, 'Program Confidence Status'),
         Program_Category: requireText(g.Program_Category, 'Program Category'),
-        Age_Band: choiceListCell(g.Age_Band),
-        Primary_Municipality: resolveLocationRowId(
+        Cost_Basis: scalarCompare(g.Cost_Basis),
+        Funding_Type: scalarCompare(g.Funding_Type),
+        Funding_Maximum: scalarCompare(g.Funding_Maximum),
+        Application_Status: scalarCompare(g.Application_Status),
+        Application_Deadline: scalarCompare(g.Application_Deadline),
+        Means_Tested: scalarCompare(g.Means_Tested),
+        Reimbursement_Based: scalarCompare(g.Reimbursement_Based),
+        Last_Verified_On: nonBlank(g.Last_Verified_On)
+          ? dateOnlySeconds(g.Last_Verified_On, 'Last Verified On')
+          : null
+      };
+
+      if (fundingProgram) {
+        if (nonBlank(g.Delivery_Mode)) programDesired.Delivery_Mode = choiceListCell([g.Delivery_Mode]);
+        if (normalizeChoiceListValue(g.Age_Band).length) programDesired.Age_Band = choiceListCell(g.Age_Band);
+        if (nonBlank(g.Primary_Municipality)) {
+          programDesired.Primary_Municipality = resolveLocationRowId(
+            g.Primary_Municipality,
+            locations,
+            'Program Primary Municipality'
+          );
+        }
+        requireText(g.Application_Status, 'Funding Program Application Status');
+        if (!dateInputValue(g.Last_Verified_On)) throw new Error('Funding Program Last Verified date is required.');
+      } else {
+        programDesired.Delivery_Mode = choiceListCell([requireText(g.Delivery_Mode, 'Program Delivery Mode')]);
+        programDesired.Age_Band = choiceListCell(g.Age_Band);
+        programDesired.Primary_Municipality = resolveLocationRowId(
           requireText(g.Primary_Municipality, 'Program Primary Municipality'),
           locations,
           'Program Primary Municipality'
-        ),
-        Cost_Basis: scalarCompare(g.Cost_Basis)
-      };
-
-      if (!choiceCompare(programDesired.Age_Band).length) {
-        throw new Error('Program Age Band is required.');
+        );
+        if (!choiceCompare(programDesired.Age_Band).length) {
+          throw new Error('Program Age Band is required.');
+        }
       }
 
       const providerDiff = providerAction === 'Update'
@@ -3049,6 +3464,11 @@
       return;
     }
 
+    if (providerAction === 'No change' && programAction === 'Create') {
+      await promoteExistingProviderCreateProgram();
+      return;
+    }
+
     const updatePair =
       ['Update', 'No change'].includes(providerAction) &&
       ['Update', 'No change'].includes(programAction) &&
@@ -3060,7 +3480,7 @@
     }
 
     setSaveStatus(
-      'Unsupported promotion combination for Phase 8D.2. Use Create/Create or matched Update/No change with at least one Update.',
+      'Unsupported promotion combination. Use Create/Create, No change/Create for a new Program under an existing Provider, or matched Update/No change with at least one Update.',
       'error'
     );
   }
@@ -3089,7 +3509,7 @@
     const programFields = programDraft.fields || {};
     const claims = programDraft.claims || {};
 
-    let canonical = { provider: null, program: null, locationsById: new Map() };
+    let canonical = { submission: null, provider: null, program: null, locationsById: new Map() };
     try {
       canonical = await fetchCanonicalContext(record);
     } catch (err) {
@@ -3099,6 +3519,10 @@
 
     const currentProvider = canonical.provider;
     const currentProgram = canonical.program;
+    const submission = canonical.submission || record;
+    const museResearch = displayValue(submission.Submission_Source) === 'Muse Research';
+    const defaultInformationSource = museResearch ? 'Synaptree research' : 'Provider submitted';
+    const defaultConfidenceStatus = museResearch ? 'Published information checked' : 'Provider supplied';
     currentCanonicalContext = canonical;
 
     promotionRecovery = await determinePromotionRecovery(record);
@@ -3187,7 +3611,7 @@
       draftOr(
         providerFields,
         'Information_Source',
-        displayValue(currentProvider && currentProvider.Information_Source) || 'Provider submitted'
+        displayValue(currentProvider && currentProvider.Information_Source) || defaultInformationSource
       )
     );
     setControl(
@@ -3195,7 +3619,7 @@
       draftOr(
         providerFields,
         'Confidence_Status',
-        displayValue(currentProvider && currentProvider.Confidence_Status) || 'Provider supplied'
+        displayValue(currentProvider && currentProvider.Confidence_Status) || defaultConfidenceStatus
       )
     );
     setControl(
@@ -3225,6 +3649,13 @@
     put('g_cur_source', currentProgram && currentProgram.Information_Source, 'No canonical record');
     put('g_cur_confidence', currentProgram && currentProgram.Confidence_Status, 'No canonical record');
     put('g_cur_category', currentProgram && currentProgram.Program_Category, 'No canonical record');
+    put('g_cur_fundingtype', currentProgram && currentProgram.Funding_Type, 'No canonical record');
+    put('g_cur_fundingmaximum', currentProgram && currentProgram.Funding_Maximum, 'No canonical record');
+    put('g_cur_applicationstatus', currentProgram && currentProgram.Application_Status, 'No canonical record');
+    put('g_cur_applicationdeadline', currentProgram && currentProgram.Application_Deadline, 'No canonical record');
+    put('g_cur_meanstested', currentProgram && currentProgram.Means_Tested, 'No canonical record');
+    put('g_cur_reimbursement', currentProgram && currentProgram.Reimbursement_Based, 'No canonical record');
+    put('g_cur_lastverified', currentProgram ? dateInputValue(currentProgram.Last_Verified_On) : null, 'No canonical record');
     put('g_cur_age', currentProgram && currentProgram.Age_Band, 'No canonical record');
     put(
       'g_cur_municipality',
@@ -3242,7 +3673,14 @@
     put('g_sub_costnotes', record.Cost_Information);
     put('g_sub_source', null, 'Derived from submission');
     put('g_sub_confidence', null, 'Derived from submission');
-    put('g_sub_category', null, 'Not collected as canonical category');
+    put('g_sub_category', submission.Program_Category);
+    put('g_sub_fundingtype', submission.Funding_Type);
+    put('g_sub_fundingmaximum', submission.Funding_Maximum);
+    put('g_sub_applicationstatus', submission.Application_Status);
+    put('g_sub_applicationdeadline', submission.Application_Deadline);
+    put('g_sub_meanstested', submission.Means_Tested);
+    put('g_sub_reimbursement', submission.Reimbursement_Based);
+    put('g_sub_lastverified', dateInputValue(submission.Last_Verified_On));
     put('g_sub_age', record.Age_Range);
     put('g_sub_municipality', record.Municipality);
     put('g_sub_costbasis', record.Cost_Information);
@@ -3280,7 +3718,7 @@
       draftOr(
         programFields,
         'Information_Source',
-        displayValue(currentProgram && currentProgram.Information_Source) || 'Provider submitted'
+        displayValue(currentProgram && currentProgram.Information_Source) || defaultInformationSource
       )
     );
     setControl(
@@ -3288,12 +3726,50 @@
       draftOr(
         programFields,
         'Confidence_Status',
-        displayValue(currentProgram && currentProgram.Confidence_Status) || 'Provider supplied'
+        displayValue(currentProgram && currentProgram.Confidence_Status) || defaultConfidenceStatus
       )
     );
     setControl(
       'g_final_category',
-      draftOr(programFields, 'Program_Category', displayValue(currentProgram && currentProgram.Program_Category) || '')
+      draftOr(
+        programFields,
+        'Program_Category',
+        reviewDefault(submission.Program_Category, currentProgram && currentProgram.Program_Category, !!currentProgram)
+      )
+    );
+    setControl(
+      'g_final_fundingtype',
+      draftOr(programFields, 'Funding_Type', reviewDefault(submission.Funding_Type, currentProgram && currentProgram.Funding_Type, !!currentProgram))
+    );
+    setControl(
+      'g_final_fundingmaximum',
+      draftOr(programFields, 'Funding_Maximum', reviewDefault(submission.Funding_Maximum, currentProgram && currentProgram.Funding_Maximum, !!currentProgram))
+    );
+    setControl(
+      'g_final_applicationstatus',
+      draftOr(programFields, 'Application_Status', reviewDefault(submission.Application_Status, currentProgram && currentProgram.Application_Status, !!currentProgram))
+    );
+    setControl(
+      'g_final_applicationdeadline',
+      draftOr(programFields, 'Application_Deadline', reviewDefault(submission.Application_Deadline, currentProgram && currentProgram.Application_Deadline, !!currentProgram))
+    );
+    setControl(
+      'g_final_meanstested',
+      draftOr(programFields, 'Means_Tested', reviewDefault(submission.Means_Tested, currentProgram && currentProgram.Means_Tested, !!currentProgram))
+    );
+    setControl(
+      'g_final_reimbursement',
+      draftOr(programFields, 'Reimbursement_Based', reviewDefault(submission.Reimbursement_Based, currentProgram && currentProgram.Reimbursement_Based, !!currentProgram))
+    );
+    setControl(
+      'g_final_lastverified',
+      draftOr(
+        programFields,
+        'Last_Verified_On',
+        currentProgram && hasValue(currentProgram.Last_Verified_On)
+          ? dateInputValue(currentProgram.Last_Verified_On)
+          : dateInputValue(submission.Last_Verified_On)
+      )
     );
 
     const defaultAgeBands = hasValue(record.Age_Range)
@@ -3322,6 +3798,9 @@
 
     put('Service_Area', record.Service_Area);
     put('Existing_Program', record.Existing_Program);
+    put('Submission_Source', submission.Submission_Source);
+    put('Research_Run_ID', submission.Research_Run_ID);
+    put('Research_Source_Notes', submission.Research_Source_Notes);
 
     put('c_sub_eligibility', record.Eligibility_Information);
     put('c_sub_funding', record.Funding_Information);
@@ -3429,6 +3908,13 @@
         Information_Source: getControl('g_final_source'),
         Confidence_Status: getControl('g_final_confidence'),
         Program_Category: getControl('g_final_category'),
+        Funding_Type: getControl('g_final_fundingtype'),
+        Funding_Maximum: getControl('g_final_fundingmaximum'),
+        Application_Status: getControl('g_final_applicationstatus'),
+        Application_Deadline: getControl('g_final_applicationdeadline'),
+        Means_Tested: getControl('g_final_meanstested'),
+        Reimbursement_Based: getControl('g_final_reimbursement'),
+        Last_Verified_On: getControl('g_final_lastverified'),
         Age_Band: getChoiceList('g_final_age'),
         Primary_Municipality: getControl('g_final_municipality'),
         Cost_Basis: getControl('g_final_costbasis')
