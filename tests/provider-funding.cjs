@@ -95,4 +95,18 @@ assert(
   'Muse submissions must not be mislabeled as provider-submitted'
 );
 
-console.log('PASS: funding review fields, draft persistence, create/update promotion, provenance, and No change/Create dispatcher are wired.');
+
+assert(
+  html.includes("Canonical promotion completed successfully."),
+  'completed promotions must short-circuit duplicate-readiness warnings'
+);
+assert(
+  html.includes("existingProviderCreateProgram"),
+  '8D.5 gating must recognize existing Provider + Create Program'
+);
+assert(
+  html.includes("Approved new Program is ready to be created under the matched existing Provider."),
+  'approved existing-provider/new-program status must be explicit'
+);
+
+console.log('PASS: funding review fields, draft persistence, completed-state handling, create/update promotion, provenance, and No change/Create gates are wired.');
