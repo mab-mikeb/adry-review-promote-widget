@@ -1,0 +1,4031 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Project ADry Review & Promote</title>
+  <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+
+  <style>
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      padding: 18px;
+      font-family: Arial, Helvetica, sans-serif;
+      background: #f7f7f7;
+      color: #222;
+    }
+
+    .shell {
+      max-width: 1200px;
+      margin: 0 auto;
+      background: white;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    .header {
+      padding: 18px 22px;
+      border-bottom: 1px solid #ddd;
+    }
+
+    .header h1 {
+      margin: 0 0 4px;
+      font-size: 20px;
+    }
+
+    .header p {
+      margin: 0;
+      color: #666;
+      font-size: 13px;
+    }
+
+    .summary {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      padding: 12px 22px;
+      border-bottom: 1px solid #ddd;
+      background: #fafafa;
+    }
+
+    .badge {
+      border: 1px solid #ccc;
+      border-radius: 14px;
+      padding: 4px 10px;
+      font-size: 12px;
+      background: white;
+    }
+
+    .action-strip {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      padding: 14px 22px;
+      border-bottom: 1px solid #ddd;
+      background: #fff;
+    }
+
+    .action-box label {
+      display: block;
+      font-size: 12px;
+      font-weight: 700;
+      margin-bottom: 5px;
+    }
+
+    select,
+    input,
+    textarea {
+      width: 100%;
+      border: 1px solid #bbb;
+      border-radius: 5px;
+      padding: 8px 9px;
+      font: inherit;
+      background: #fff;
+    }
+
+    textarea {
+      min-height: 74px;
+      resize: vertical;
+    }
+
+    .review-table input,
+    .review-table select,
+    .review-table textarea {
+      min-width: 0;
+      max-width: 100%;
+    }
+
+    .choice-list {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 6px 10px;
+    }
+
+    .choice-list label {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      min-width: 0;
+      font-weight: 400;
+    }
+
+    .choice-list input[type="checkbox"] {
+      width: auto;
+      flex: 0 0 auto;
+      margin: 0;
+    }
+
+    .tabs {
+      display: flex;
+      border-bottom: 1px solid #ddd;
+      padding: 0 22px;
+    }
+
+    .tab {
+      padding: 12px 16px;
+      cursor: pointer;
+      border: none;
+      background: none;
+      font-weight: 600;
+      color: #666;
+    }
+
+    .tab.active {
+      color: #111;
+      border-bottom: 3px solid #333;
+    }
+
+    .content { padding: 22px; }
+
+    .panel { display: none; }
+    .panel.active { display: block; }
+
+    .panel.entity-no-change .canonical-table {
+      opacity: .72;
+    }
+
+    .panel.entity-no-change .section-title::after {
+      content: " · NO CHANGE";
+      font-size: 11px;
+      font-weight: 700;
+      color: #666;
+      letter-spacing: .04em;
+    }
+
+    .tab.no-change {
+      color: #666;
+    }
+
+    .tab.update {
+      color: #1f5f2c;
+    }
+
+    .notice {
+      padding: 12px 14px;
+      margin-bottom: 18px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      background: #fafafa;
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .section-title {
+      margin: 20px 0 8px;
+      font-size: 15px;
+    }
+
+    .review-table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+      border: 1px solid #ddd;
+    }
+
+    .review-table th,
+    .review-table td {
+      padding: 10px 12px;
+      border-bottom: 1px solid #e7e7e7;
+      border-right: 1px solid #eee;
+      vertical-align: top;
+      text-align: left;
+      word-break: break-word;
+      font-size: 13px;
+    }
+
+    .review-table th {
+      background: #f5f5f5;
+      font-weight: 700;
+    }
+
+    .review-table th:nth-child(1) { width: 20%; }
+    .review-table th:nth-child(2) { width: 27%; }
+    .review-table th:nth-child(3) { width: 30%; }
+    .review-table th:nth-child(4) { width: 23%; }
+
+    .canonical-table th:nth-child(1) { width: 21%; }
+    .canonical-table th:nth-child(2) { width: 19%; }
+    .canonical-table th:nth-child(3) { width: 19%; }
+    .canonical-table th:nth-child(4) { width: 25%; }
+    .canonical-table th:nth-child(5) { width: 16%; }
+
+    .canonical-table td:nth-child(1) {
+      white-space: nowrap;
+      font-size: 12px;
+      word-break: normal;
+    }
+
+    .rule-badge {
+      display: inline-block;
+      border: 1px solid #c7c7c7;
+      border-radius: 12px;
+      padding: 2px 7px;
+      font-size: 11px;
+      margin-bottom: 4px;
+      background: #fff;
+    }
+
+    .muted { color: #777; }
+
+    .empty {
+      color: #888;
+      font-style: italic;
+    }
+
+    .field-grid {
+      display: grid;
+      grid-template-columns: minmax(180px, 1fr) 2fr;
+      border-top: 1px solid #ddd;
+    }
+
+    .label,
+    .value {
+      padding: 10px 12px;
+      border-bottom: 1px solid #eee;
+    }
+
+    .label {
+      font-weight: 600;
+      background: #fafafa;
+    }
+
+    .value {
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .save-bar {
+      position: sticky;
+      bottom: 0;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 22px;
+      border-top: 1px solid #ccc;
+      background: #fff;
+      z-index: 5;
+    }
+
+    .save-button {
+      border: 0;
+      border-radius: 6px;
+      padding: 10px 16px;
+      font-weight: 700;
+      cursor: pointer;
+      background: #222;
+      color: #fff;
+    }
+
+    .save-button:disabled {
+      cursor: default;
+      opacity: .5;
+    }
+
+    .save-status {
+      font-size: 13px;
+      color: #666;
+    }
+
+    .save-status.error { color: #9b1c1c; }
+    .save-status.success { color: #246b2d; }
+
+    .readiness-panel {
+      margin: 0 22px 18px;
+      padding: 16px;
+      border: 1px solid #ccc;
+      border-radius: 7px;
+      background: #fafafa;
+    }
+
+    .readiness-panel h2 {
+      margin: 0 0 8px;
+      font-size: 16px;
+    }
+
+    .readiness-headline {
+      margin-bottom: 10px;
+      font-weight: 700;
+    }
+
+    .readiness-list {
+      margin: 0 0 12px;
+      padding-left: 20px;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .readiness-list li.ok { color: #246b2d; }
+    .readiness-list li.warn { color: #7a5b00; }
+    .readiness-list li.block { color: #9b1c1c; }
+
+    .readiness-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .secondary-button,
+    .approval-button,
+    .promote-button,
+    .reopen-button,
+    .disposition-button {
+      border: 1px solid #777;
+      border-radius: 6px;
+      padding: 9px 14px;
+      font-weight: 700;
+      cursor: pointer;
+      background: #fff;
+      color: #222;
+    }
+
+    .approval-button {
+      background: #222;
+      color: #fff;
+      border-color: #222;
+    }
+
+    .promote-button {
+      background: #1f5f2c;
+      color: #fff;
+      border-color: #1f5f2c;
+    }
+
+    .secondary-button:disabled,
+    .approval-button:disabled,
+    .promote-button:disabled,
+    .reopen-button:disabled,
+    .disposition-button:disabled {
+      opacity: .45;
+      cursor: default;
+    }
+
+    .approval-status {
+      margin-top: 10px;
+      font-size: 13px;
+      color: #555;
+    }
+
+    .approval-note {
+      margin-top: 8px;
+      font-size: 12px;
+      color: #666;
+      line-height: 1.4;
+    }
+
+    .waiting {
+      padding: 50px 20px;
+      text-align: center;
+      color: #777;
+    }
+
+    @media (max-width: 760px) {
+      body { padding: 8px; }
+
+      .action-strip { grid-template-columns: 1fr; }
+
+      .review-table,
+      .review-table thead,
+      .review-table tbody,
+      .review-table th,
+      .review-table td,
+      .review-table tr {
+        display: block;
+      }
+
+      .review-table thead {
+        position: absolute;
+        left: -9999px;
+      }
+
+      .review-table tr {
+        border-bottom: 2px solid #ddd;
+      }
+
+      .review-table td {
+        border-right: none;
+      }
+
+      .review-table td::before {
+        display: block;
+        font-weight: 700;
+        color: #555;
+        margin-bottom: 3px;
+      }
+
+      .review-table td:nth-child(1)::before { content: "Claim / field"; }
+      .review-table td:nth-child(2)::before { content: "Submitted"; }
+      .review-table td:nth-child(3)::before { content: "Decision / final"; }
+      .review-table td:nth-child(4)::before { content: "Reason / rule"; }
+
+      .canonical-table td:nth-child(1) {
+        white-space: normal;
+        font-size: 13px;
+      }
+
+      .canonical-table td:nth-child(1)::before { content: "Canonical field"; }
+      .canonical-table td:nth-child(2)::before { content: "Current KB"; }
+      .canonical-table td:nth-child(3)::before { content: "Submitted"; }
+      .canonical-table td:nth-child(4)::before { content: "Suggested / Final"; }
+      .canonical-table td:nth-child(5)::before { content: "Rule"; }
+
+      .field-grid { grid-template-columns: 1fr; }
+
+      .label {
+        border-bottom: none;
+        padding-bottom: 2px;
+      }
+
+      .value { padding-top: 2px; }
+    }
+  </style>
+</head>
+
+<body>
+<div class="shell">
+  <div class="header">
+    <h1>Project ADry — Review & Promote</h1>
+    <p>Phase 8D.5 · Funding-aware Provider/Program review & promotion</p>
+  </div>
+
+  <div id="waiting" class="waiting">
+    Select a provider submission in Grist.
+  </div>
+
+  <div id="workspace" style="display:none;">
+    <div class="summary">
+      <span class="badge" id="submissionBadge"></span>
+      <span class="badge" id="statusBadge"></span>
+      <span class="badge" id="providerMatchBadge"></span>
+      <span class="badge" id="programMatchBadge"></span>
+    </div>
+
+    <div class="action-strip">
+      <div class="action-box">
+        <label for="providerAction">Provider action</label>
+        <select id="providerAction">
+          <option value="">Select action</option>
+          <option>Create</option>
+          <option>Update</option>
+          <option>No change</option>
+          <option>Verification required</option>
+          <option>Reject</option>
+        </select>
+      </div>
+
+      <div class="action-box">
+        <label for="programAction">Program action</label>
+        <select id="programAction">
+          <option value="">Select action</option>
+          <option>Create</option>
+          <option>Update</option>
+          <option>No change</option>
+          <option>Verification required</option>
+          <option>Reject</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="tabs">
+      <button class="tab active" data-tab="provider">Provider</button>
+      <button class="tab" data-tab="program">Program</button>
+      <button class="tab" data-tab="claims">Claims / QA</button>
+    </div>
+
+    <div class="content">
+      <div id="provider" class="panel active">
+        <div class="notice" id="providerMatchNotice"></div>
+
+        <div class="notice">
+          <strong>Draft mode:</strong> edit the Suggested / Final values and then use
+          <strong>Save Review Draft</strong>. This saves only to the submission's hidden review-draft fields.
+          It does not create or update a canonical Provider.
+        </div>
+
+        <h2 class="section-title">Provider canonical review</h2>
+
+        <table class="review-table canonical-table">
+          <thead>
+            <tr>
+              <th>Canonical field</th>
+              <th>Current KB</th>
+              <th>Submitted</th>
+              <th>Suggested / Final</th>
+              <th>Rule</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Provider_Name</td>
+              <td id="p_cur_name"></td>
+              <td id="p_sub_name"></td>
+              <td><input id="p_final_name" type="text"></td>
+              <td><span class="rule-badge">Auto</span><br><span class="muted">Submission if supplied; otherwise preserve current</span></td>
+            </tr>
+            <tr>
+              <td>Website</td>
+              <td id="p_cur_website"></td>
+              <td id="p_sub_website"></td>
+              <td><input id="p_final_website" type="text"></td>
+              <td><span class="rule-badge">Auto</span><br><span class="muted">Submission if supplied; otherwise preserve current</span></td>
+            </tr>
+            <tr>
+              <td>Organization_Type</td>
+              <td id="p_cur_orgtype"></td>
+              <td id="p_sub_orgtype"></td>
+              <td>
+                <select id="p_final_orgtype">
+                  <option value="">Select...</option>
+                  <option>Non-profit</option>
+                  <option>Charity</option>
+                  <option>Municipal</option>
+                  <option>Government</option>
+                  <option>Private/For-profit</option>
+                  <option>Community organization</option>
+                  <option>Educational institution</option>
+                  <option>Other</option>
+                </select>
+              </td>
+              <td><span class="rule-badge">Review</span><br><span class="muted">Preserve current unless reviewer changes it</span></td>
+            </tr>
+            <tr>
+              <td>Primary_Municipality</td>
+              <td id="p_cur_municipality"></td>
+              <td id="p_sub_municipality"></td>
+              <td><input id="p_final_municipality" type="text" placeholder="Reviewer input required"></td>
+              <td><span class="rule-badge">Review</span><br><span class="muted">Do not auto-map program location to Provider</span></td>
+            </tr>
+            <tr>
+              <td>Information_Source</td>
+              <td id="p_cur_source"></td>
+              <td id="p_sub_source"></td>
+              <td>
+                <select id="p_final_source">
+                  <option>Public web</option>
+                  <option>Community/directory</option>
+                  <option>Provider submitted</option>
+                  <option>Provider directly confirmed</option>
+                  <option>Synaptree research</option>
+                  <option>Other</option>
+                </select>
+              </td>
+              <td><span class="rule-badge">Auto</span><br><span class="muted">New: Provider submitted. Existing: preserve current by default</span></td>
+            </tr>
+            <tr>
+              <td>Confidence_Status</td>
+              <td id="p_cur_confidence"></td>
+              <td id="p_sub_confidence"></td>
+              <td>
+                <select id="p_final_confidence">
+                  <option>Unverified lead</option>
+                  <option>Published information checked</option>
+                  <option>Provider supplied</option>
+                  <option>Provider confirmed</option>
+                  <option>Synaptree verified</option>
+                  <option>Needs re-verification</option>
+                  <option>Superseded</option>
+                </select>
+              </td>
+              <td><span class="rule-badge">Safe default</span><br><span class="muted">Never downgrade an existing confidence level automatically</span></td>
+            </tr>
+            <tr>
+              <td>Provider_Participation_Level</td>
+              <td id="p_cur_participation"></td>
+              <td id="p_sub_participation"></td>
+              <td>
+                <select id="p_final_participation">
+                  <option>Community listing</option>
+                  <option>Free provider profile</option>
+                  <option>Community Builder member</option>
+                  <option>Other</option>
+                </select>
+              </td>
+              <td><span class="rule-badge">Safe default</span><br><span class="muted">New: Community listing. Existing: preserve current</span></td>
+            </tr>
+            <tr>
+              <td>Primary_Email</td>
+              <td id="p_cur_email"></td>
+              <td id="p_sub_email"></td>
+              <td><input id="p_final_email" type="email" placeholder="Optional provider email"></td>
+              <td><span class="rule-badge">Review</span><br><span class="muted">Contact_Email is context only; preserve existing Primary_Email</span></td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h2 class="section-title">Submission context</h2>
+        <div class="field-grid">
+          <div class="label">Submitted contact</div>
+          <div class="value" id="Contact_Name"></div>
+
+          <div class="label">Contact role</div>
+          <div class="value" id="Contact_Role"></div>
+
+          <div class="label">Existing Provider match</div>
+          <div class="value" id="Existing_Provider"></div>
+        </div>
+      </div>
+
+      <div id="program" class="panel">
+        <div class="notice" id="programMatchNotice"></div>
+
+        <div class="notice">
+          <strong>Draft mode:</strong> these edits are saved only into Program_Review_Draft.
+          Reference resolution and canonical promotion come later.
+        </div>
+
+        <h2 class="section-title">Program canonical review</h2>
+
+        <table class="review-table canonical-table">
+          <thead>
+            <tr>
+              <th>Canonical field</th>
+              <th>Current KB</th>
+              <th>Submitted</th>
+              <th>Suggested / Final</th>
+              <th>Rule</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Program_Name</td>
+              <td id="g_cur_name"></td>
+              <td id="g_sub_name"></td>
+              <td><input id="g_final_name" type="text"></td>
+              <td><span class="rule-badge">Auto</span><br><span class="muted">Submission if supplied; otherwise preserve current</span></td>
+            </tr>
+            <tr>
+              <td>Program_URL</td>
+              <td id="g_cur_url"></td>
+              <td id="g_sub_url"></td>
+              <td><input id="g_final_url" type="text"></td>
+              <td><span class="rule-badge">Auto</span><br><span class="muted">Submission if supplied; otherwise preserve current</span></td>
+            </tr>
+            <tr>
+              <td>Program_Summary</td>
+              <td id="g_cur_summary"></td>
+              <td id="g_sub_summary"></td>
+              <td><textarea id="g_final_summary"></textarea></td>
+              <td><span class="rule-badge">Auto</span><br><span class="muted">Description → Summary when submitted</span></td>
+            </tr>
+            <tr>
+              <td>Delivery_Mode</td>
+              <td id="g_cur_delivery"></td>
+              <td id="g_sub_delivery"></td>
+              <td>
+                <select id="g_final_delivery">
+                  <option value="">Select...</option>
+                  <option>In-person</option>
+                  <option>Virtual</option>
+                  <option>Hybrid</option>
+                </select>
+              </td>
+              <td><span class="rule-badge">Auto</span><br><span class="muted">Submission if supplied; otherwise preserve current</span></td>
+            </tr>
+            <tr>
+              <td>Days_Offered</td>
+              <td id="g_cur_days"></td>
+              <td id="g_sub_days"></td>
+              <td><input id="g_final_days" type="text"></td>
+              <td><span class="rule-badge">Review</span><br><span class="muted">Reviewer-normalized Choice List draft</span></td>
+            </tr>
+            <tr>
+              <td>Time_of_Day</td>
+              <td id="g_cur_time"></td>
+              <td id="g_sub_time"></td>
+              <td><input id="g_final_time" type="text"></td>
+              <td><span class="rule-badge">Review</span><br><span class="muted">Reviewer-normalized Choice List draft</span></td>
+            </tr>
+            <tr>
+              <td>Cost_Notes</td>
+              <td id="g_cur_costnotes"></td>
+              <td id="g_sub_costnotes"></td>
+              <td><textarea id="g_final_costnotes"></textarea></td>
+              <td><span class="rule-badge">Auto</span><br><span class="muted">Cost information → Cost notes when submitted</span></td>
+            </tr>
+            <tr>
+              <td>Information_Source</td>
+              <td id="g_cur_source"></td>
+              <td id="g_sub_source"></td>
+              <td>
+                <select id="g_final_source">
+                  <option>Public web</option>
+                  <option>Community/directory</option>
+                  <option>Provider submitted</option>
+                  <option>Provider directly confirmed</option>
+                  <option>Synaptree research</option>
+                  <option>Other</option>
+                </select>
+              </td>
+              <td><span class="rule-badge">Safe default</span><br><span class="muted">New: Provider submitted. Existing: preserve current</span></td>
+            </tr>
+            <tr>
+              <td>Confidence_Status</td>
+              <td id="g_cur_confidence"></td>
+              <td id="g_sub_confidence"></td>
+              <td>
+                <select id="g_final_confidence">
+                  <option>Unverified lead</option>
+                  <option>Published information checked</option>
+                  <option>Provider supplied</option>
+                  <option>Provider confirmed</option>
+                  <option>Synaptree verified</option>
+                  <option>Needs re-verification</option>
+                  <option>Superseded</option>
+                </select>
+              </td>
+              <td><span class="rule-badge">Safe default</span><br><span class="muted">Never downgrade an existing confidence level automatically</span></td>
+            </tr>
+            <tr>
+              <td>Program_Category</td>
+              <td id="g_cur_category"></td>
+              <td id="g_sub_category"></td>
+              <td>
+                <select id="g_final_category">
+                  <option value="">Select...</option>
+                  <option>Social/Recreation</option>
+                  <option>Life Skills</option>
+                  <option>Employment</option>
+                  <option>Education/Training</option>
+                  <option>Respite</option>
+                  <option>Community Participation</option>
+                  <option>Funding / Financial Assistance</option>
+                  <option>Disability Support</option>
+                  <option>Recreation / Community Participation</option>
+                  <option>Transportation</option>
+                  <option>Accessibility / Equipment</option>
+                  <option>Respite / Caregiver</option>
+                  <option>Housing</option>
+                  <option>Health / Clinical</option>
+                  <option>Other</option>
+                </select>
+              </td>
+              <td><span class="rule-badge">Review</span><br><span class="muted">New Program: use submitted category. Existing Program: preserve current unless reviewer changes it.</span></td>
+            </tr>
+            <tr>
+              <td>Funding_Type</td>
+              <td id="g_cur_fundingtype"></td>
+              <td id="g_sub_fundingtype"></td>
+              <td>
+                <select id="g_final_fundingtype">
+                  <option value="">Not a funding program / blank</option>
+                  <option>Tax Credit</option>
+                  <option>Income Benefit</option>
+                  <option>Grant</option>
+                  <option>Subsidy</option>
+                  <option>Reimbursement</option>
+                  <option>Equipment Funding</option>
+                  <option>Fee Assistance</option>
+                  <option>Savings Incentive</option>
+                  <option>Service Funding</option>
+                  <option>Direct Funding</option>
+                  <option>Other</option>
+                </select>
+              </td>
+              <td><span class="rule-badge">Review</span><br><span class="muted">A non-blank Funding Type marks this as a funding/benefit Program.</span></td>
+            </tr>
+            <tr>
+              <td>Funding_Maximum</td>
+              <td id="g_cur_fundingmaximum"></td>
+              <td id="g_sub_fundingmaximum"></td>
+              <td><input id="g_final_fundingmaximum" type="text"></td>
+              <td><span class="rule-badge">Review</span><br><span class="muted">Text is intentional so ranges, percentages, and benefit years are preserved.</span></td>
+            </tr>
+            <tr>
+              <td>Application_Status</td>
+              <td id="g_cur_applicationstatus"></td>
+              <td id="g_sub_applicationstatus"></td>
+              <td>
+                <select id="g_final_applicationstatus">
+                  <option value="">Select...</option>
+                  <option>Ongoing</option>
+                  <option>Open</option>
+                  <option>Closed</option>
+                  <option>Recurring Window</option>
+                  <option>Time-Limited</option>
+                  <option>Waitlist</option>
+                  <option>Unknown</option>
+                </select>
+              </td>
+              <td><span class="rule-badge">Review</span><br><span class="muted">Current application/access status.</span></td>
+            </tr>
+            <tr>
+              <td>Application_Deadline</td>
+              <td id="g_cur_applicationdeadline"></td>
+              <td id="g_sub_applicationdeadline"></td>
+              <td><input id="g_final_applicationdeadline" type="text"></td>
+              <td><span class="rule-badge">Review</span><br><span class="muted">Free text supports recurring windows and conditional deadlines.</span></td>
+            </tr>
+            <tr>
+              <td>Means_Tested</td>
+              <td id="g_cur_meanstested"></td>
+              <td id="g_sub_meanstested"></td>
+              <td>
+                <select id="g_final_meanstested">
+                  <option value="">Select...</option>
+                  <option>Yes</option>
+                  <option>No</option>
+                  <option>Unknown</option>
+                </select>
+              </td>
+              <td><span class="rule-badge">Review</span><br><span class="muted">Unknown is distinct from No.</span></td>
+            </tr>
+            <tr>
+              <td>Reimbursement_Based</td>
+              <td id="g_cur_reimbursement"></td>
+              <td id="g_sub_reimbursement"></td>
+              <td>
+                <select id="g_final_reimbursement">
+                  <option value="">Select...</option>
+                  <option>Yes</option>
+                  <option>No</option>
+                  <option>Mixed</option>
+                  <option>Unknown</option>
+                </select>
+              </td>
+              <td><span class="rule-badge">Review</span><br><span class="muted">Whether the participant typically pays first and is reimbursed.</span></td>
+            </tr>
+            <tr>
+              <td>Last_Verified_On</td>
+              <td id="g_cur_lastverified"></td>
+              <td id="g_sub_lastverified"></td>
+              <td><input id="g_final_lastverified" type="date"></td>
+              <td><span class="rule-badge">Review</span><br><span class="muted">Date the funding/program information was last verified.</span></td>
+            </tr>
+            <tr>
+              <td>Age_Band</td>
+              <td id="g_cur_age"></td>
+              <td id="g_sub_age"></td>
+              <td>
+                <div id="g_final_age" class="choice-list" role="group" aria-label="Age Band">
+                  <label><input type="checkbox" value="Child">Child</label>
+                  <label><input type="checkbox" value="Teen">Teen</label>
+                  <label><input type="checkbox" value="Young Adult">Young Adult</label>
+                  <label><input type="checkbox" value="Adult">Adult</label>
+                  <label><input type="checkbox" value="Older Adult">Older Adult</label>
+                  <label><input type="checkbox" value="All Ages">All Ages</label>
+                  <label><input type="checkbox" value="Other/Unclear">Other/Unclear</label>
+                </div>
+              </td>
+              <td><span class="rule-badge">Rule + Review</span><br><span class="muted">Submitted numeric range proposes bands; reviewer may adjust</span></td>
+            </tr>
+            <tr>
+              <td>Primary_Municipality</td>
+              <td id="g_cur_municipality"></td>
+              <td id="g_sub_municipality"></td>
+              <td><input id="g_final_municipality" type="text"></td>
+              <td><span class="rule-badge">Review</span><br><span class="muted">Resolve final text to Locations reference at promotion</span></td>
+            </tr>
+            <tr>
+              <td>Cost_Basis</td>
+              <td id="g_cur_costbasis"></td>
+              <td id="g_sub_costbasis"></td>
+              <td>
+                <select id="g_final_costbasis">
+                  <option value="">Select...</option>
+                  <option>Free</option>
+                  <option>Drop-in</option>
+                  <option>Per session</option>
+                  <option>Weekly</option>
+                  <option>Monthly</option>
+                  <option>Program/term</option>
+                  <option>Annual</option>
+                  <option>Tuition</option>
+                  <option>Variable</option>
+                  <option>Quote required</option>
+                  <option>Other</option>
+                </select>
+              </td>
+              <td><span class="rule-badge">Review</span><br><span class="muted">Preserve current unless reviewer changes it</span></td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h2 class="section-title">Submission context</h2>
+        <div class="field-grid">
+          <div class="label">Service area</div>
+          <div class="value" id="Service_Area"></div>
+
+          <div class="label">Existing Program match</div>
+          <div class="value" id="Existing_Program"></div>
+
+          <div class="label">Submission source</div>
+          <div class="value" id="Submission_Source"></div>
+
+          <div class="label">Research run</div>
+          <div class="value" id="Research_Run_ID"></div>
+
+          <div class="label">Research source notes</div>
+          <div class="value" id="Research_Source_Notes"></div>
+        </div>
+      </div>
+
+      <div id="claims" class="panel">
+        <div class="notice">
+          <strong>Claims/QA boundary:</strong> decisions here are saved as review-draft metadata only.
+          They do not update Eligibility_Rules, Program_Funding, Sources_Verification, or Verification_Tasks.
+        </div>
+
+        <h2 class="section-title">Claims review</h2>
+
+        <table class="review-table">
+          <thead>
+            <tr>
+              <th>Claim area</th>
+              <th>Submitted</th>
+              <th>Reviewer decision</th>
+              <th>Reason / next step</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Eligibility</td>
+              <td id="c_sub_eligibility"></td>
+              <td>
+                <select id="c_decision_eligibility">
+                  <option>Accept</option>
+                  <option>No change</option>
+                  <option>Verification required</option>
+                  <option>Reject</option>
+                </select>
+              </td>
+              <td>Verify before changing canonical Eligibility_Rules unless the reviewer has sufficient documented evidence.</td>
+            </tr>
+            <tr>
+              <td>Funding</td>
+              <td id="c_sub_funding"></td>
+              <td>
+                <select id="c_decision_funding">
+                  <option>Accept</option>
+                  <option>No change</option>
+                  <option>Verification required</option>
+                  <option>Reject</option>
+                </select>
+              </td>
+              <td>Verify before changing Program_Funding. Provider-supplied information alone does not mean a funding source is accepted.</td>
+            </tr>
+            <tr>
+              <td>Additional information</td>
+              <td id="c_sub_additional"></td>
+              <td>
+                <select id="c_decision_additional">
+                  <option>Accept</option>
+                  <option>No change</option>
+                  <option>Verification required</option>
+                  <option>Reject</option>
+                </select>
+              </td>
+              <td>Reviewer decides whether it belongs in a canonical field, source, verification task, or remains submission context.</td>
+            </tr>
+            <tr>
+              <td>Internal review notes</td>
+              <td id="c_sub_reviewnotes"></td>
+              <td><span class="muted">Context only</span></td>
+              <td>Internal notes are not promoted as provider-supplied canonical facts.</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h2 class="section-title">Reviewer notes for this draft</h2>
+        <textarea id="draftReviewerNotes" placeholder="Optional notes explaining decisions or items for Deep Review"></textarea>
+      </div>
+    </div>
+
+    <div class="readiness-panel">
+      <h2>Promotion readiness</h2>
+      <div id="readinessHeadline" class="readiness-headline">Complete the review draft to evaluate readiness.</div>
+      <ul id="readinessList" class="readiness-list"></ul>
+
+      <div class="readiness-actions">
+        <button id="markReady" class="secondary-button" disabled>Mark Ready to Promote</button>
+        <button id="recordApproval" class="approval-button" disabled>Record Human Approval</button>
+        <button id="reopenReview" class="reopen-button" disabled>Reopen Approved Review</button>
+        <button id="finalizeDisposition" class="disposition-button" disabled>Finalize Review Disposition</button>
+        <button id="promoteApproved" class="promote-button" disabled>Promote Approved Submission</button>
+      </div>
+
+      <div id="approvalStatus" class="approval-status"></div>
+      <div id="promotionStatus" class="approval-status"></div>
+      <div class="approval-note">
+        Phase 8D.5 extends the governed Provider/Program workflow with structured funding fields and existing-Provider/new-Program promotion while retaining human approval, duplicate protection, recovery, and audit behavior.
+      </div>
+    </div>
+
+    <div class="save-bar">
+      <button id="saveDraft" class="save-button">Save Review Draft</button>
+      <span id="saveStatus" class="save-status">No unsaved changes.</span>
+    </div>
+  </div>
+</div>
+
+<script>
+  grist.ready({
+    requiredAccess: 'full'
+  });
+
+  let currentRecord = null;
+  let isDirty = false;
+  let isRendering = false;
+  let lastReadiness = null;
+  let promotionInProgress = false;
+  let currentCanonicalContext = {
+    provider: null,
+    program: null,
+    locationsById: new Map()
+  };
+  let promotionRecovery = {
+    safeProviderResume: false,
+    repairBlankProvider: false,
+    providerRowId: null,
+    priorProgramFailure: null
+  };
+
+  function displayValue(value) {
+    if (value === null || value === undefined || value === '') return null;
+
+    if (Array.isArray(value)) {
+      const values = value.length && value[0] === 'L' ? value.slice(1) : value;
+      return values.join(', ');
+    }
+
+    return String(value);
+  }
+
+  function put(id, value, emptyText = 'Not provided') {
+    const element = document.getElementById(id);
+    if (!element) return;
+
+    const result = displayValue(value);
+
+    if (result === null) {
+      element.textContent = emptyText;
+      element.classList.add('empty');
+    } else {
+      element.textContent = result;
+      element.classList.remove('empty');
+    }
+  }
+
+  function setControl(id, value) {
+    const element = document.getElementById(id);
+    if (!element) return;
+    element.value = value === null || value === undefined ? '' : String(value);
+  }
+
+  function getControl(id) {
+    const element = document.getElementById(id);
+    return element ? element.value : '';
+  }
+
+  function hasValue(value) {
+    return !(value === null || value === undefined || value === '' || value === 0);
+  }
+
+  function normalizeChoiceListValue(value) {
+    if (Array.isArray(value)) {
+      return value[0] === 'L' ? value.slice(1) : value;
+    }
+
+    if (typeof value === 'string' && value.trim()) {
+      return value.split(',').map(v => v.trim()).filter(Boolean);
+    }
+
+    return [];
+  }
+
+  function setChoiceList(id, values) {
+    const container = document.getElementById(id);
+    if (!container) return;
+
+    const selected = new Set(normalizeChoiceListValue(values));
+    container.querySelectorAll('input[type="checkbox"]').forEach(box => {
+      box.checked = selected.has(box.value);
+    });
+  }
+
+  function getChoiceList(id) {
+    const container = document.getElementById(id);
+    if (!container) return [];
+
+    return Array.from(
+      container.querySelectorAll('input[type="checkbox"]:checked')
+    ).map(box => box.value);
+  }
+
+  function syncProviderControlsToCanonical() {
+    const provider = currentCanonicalContext.provider;
+    if (!provider) return;
+
+    setControl('p_final_name', displayValue(provider.Provider_Name) || '');
+    setControl('p_final_website', displayValue(provider.Website) || '');
+    setControl('p_final_orgtype', displayValue(provider.Organization_Type) || '');
+    setControl(
+      'p_final_municipality',
+      locationLabel(provider.Primary_Municipality, currentCanonicalContext.locationsById)
+    );
+    setControl('p_final_source', displayValue(provider.Information_Source) || '');
+    setControl('p_final_confidence', displayValue(provider.Confidence_Status) || '');
+    setControl(
+      'p_final_participation',
+      displayValue(provider.Provider_Participation_Level) || ''
+    );
+    setControl('p_final_email', displayValue(provider.Primary_Email) || '');
+  }
+
+  function syncProgramControlsToCanonical() {
+    const program = currentCanonicalContext.program;
+    if (!program) return;
+
+    setControl('g_final_name', displayValue(program.Program_Name) || '');
+    setControl('g_final_url', displayValue(program.Program_URL) || '');
+    setControl('g_final_summary', displayValue(program.Program_Summary) || '');
+    setControl('g_final_delivery', displayValue(program.Delivery_Mode) || '');
+    setControl('g_final_days', displayValue(program.Days_Offered) || '');
+    setControl('g_final_time', displayValue(program.Time_of_Day) || '');
+    setControl('g_final_costnotes', displayValue(program.Cost_Notes) || '');
+    setControl('g_final_source', displayValue(program.Information_Source) || '');
+    setControl('g_final_confidence', displayValue(program.Confidence_Status) || '');
+    setControl('g_final_category', displayValue(program.Program_Category) || '');
+    setControl('g_final_fundingtype', displayValue(program.Funding_Type) || '');
+    setControl('g_final_fundingmaximum', displayValue(program.Funding_Maximum) || '');
+    setControl('g_final_applicationstatus', displayValue(program.Application_Status) || '');
+    setControl('g_final_applicationdeadline', displayValue(program.Application_Deadline) || '');
+    setControl('g_final_meanstested', displayValue(program.Means_Tested) || '');
+    setControl('g_final_reimbursement', displayValue(program.Reimbursement_Based) || '');
+    setControl('g_final_lastverified', dateInputValue(program.Last_Verified_On));
+    setChoiceList('g_final_age', normalizeChoiceListValue(program.Age_Band));
+    setControl(
+      'g_final_municipality',
+      locationLabel(program.Primary_Municipality, currentCanonicalContext.locationsById)
+    );
+    setControl('g_final_costbasis', displayValue(program.Cost_Basis) || '');
+  }
+
+  function updateActionTabs() {
+    const providerAction = getControl('providerAction');
+    const programAction = getControl('programAction');
+    const providerTab = document.querySelector('.tab[data-tab="provider"]');
+    const programTab = document.querySelector('.tab[data-tab="program"]');
+
+    if (providerTab) {
+      providerTab.textContent = providerAction ? 'Provider · ' + providerAction : 'Provider';
+      providerTab.classList.toggle('no-change', providerAction === 'No change');
+      providerTab.classList.toggle('update', providerAction === 'Update');
+    }
+
+    if (programTab) {
+      programTab.textContent = programAction ? 'Program · ' + programAction : 'Program';
+      programTab.classList.toggle('no-change', programAction === 'No change');
+      programTab.classList.toggle('update', programAction === 'Update');
+    }
+  }
+
+  function applyEntityActionState(globalLocked = false) {
+    const providerAction = getControl('providerAction');
+    const programAction = getControl('programAction');
+    const providerNoChange = providerAction === 'No change';
+    const programNoChange = programAction === 'No change';
+
+    const providerPanel = document.getElementById('provider');
+    const programPanel = document.getElementById('program');
+
+    if (providerPanel) {
+      providerPanel.classList.toggle('entity-no-change', providerNoChange);
+      providerPanel.querySelectorAll('input, select, textarea').forEach(control => {
+        control.disabled = globalLocked || providerNoChange;
+      });
+    }
+
+    if (programPanel) {
+      programPanel.classList.toggle('entity-no-change', programNoChange);
+      programPanel.querySelectorAll('input, select, textarea').forEach(control => {
+        control.disabled = globalLocked || programNoChange;
+      });
+    }
+
+    const claimsPanel = document.getElementById('claims');
+    if (claimsPanel) {
+      claimsPanel.querySelectorAll('input, select, textarea').forEach(control => {
+        control.disabled = globalLocked;
+      });
+    }
+
+    updateActionTabs();
+  }
+
+  function handleEntityActionChange(entity) {
+    if (isRendering) return;
+
+    const action = entity === 'provider'
+      ? getControl('providerAction')
+      : getControl('programAction');
+
+    if (action === 'No change') {
+      if (entity === 'provider') {
+        syncProviderControlsToCanonical();
+      } else {
+        syncProgramControlsToCanonical();
+      }
+    }
+
+    applyEntityActionState(false);
+    markDirty();
+  }
+
+  function suggestAgeBands(ageText) {
+    const text = (displayValue(ageText) || '').trim().toLowerCase();
+    if (!text) return [];
+
+    if (/all\s*ages?/.test(text)) {
+      return ['All Ages'];
+    }
+
+    const bands = [
+      { name: 'Child', min: 0, max: 12 },
+      { name: 'Teen', min: 13, max: 17 },
+      { name: 'Young Adult', min: 18, max: 24 },
+      { name: 'Adult', min: 25, max: 64 },
+      { name: 'Older Adult', min: 65, max: Infinity }
+    ];
+
+    let minAge = null;
+    let maxAge = null;
+
+    const range = text.match(/(\d{1,3})\s*(?:-|–|—|to)\s*(\d{1,3})/i);
+    if (range) {
+      minAge = Number(range[1]);
+      maxAge = Number(range[2]);
+    } else {
+      const plus = text.match(/(\d{1,3})\s*\+/);
+      if (plus) {
+        minAge = Number(plus[1]);
+        maxAge = Infinity;
+      } else {
+        const single = text.match(/\b(\d{1,3})\b/);
+        if (single) {
+          minAge = Number(single[1]);
+          maxAge = minAge;
+        }
+      }
+    }
+
+    if (minAge === null || maxAge === null || minAge > maxAge) {
+      return [];
+    }
+
+    return bands
+      .filter(band => minAge <= band.max && maxAge >= band.min)
+      .map(band => band.name);
+  }
+
+  function tableToRows(columnFormat) {
+    if (!columnFormat || !Array.isArray(columnFormat.id)) return [];
+
+    return columnFormat.id.map((rowId, index) => {
+      const row = { id: rowId };
+      Object.keys(columnFormat).forEach(columnId => {
+        row[columnId] = columnFormat[columnId][index];
+      });
+      return row;
+    });
+  }
+
+  function refRowId(value) {
+    if (typeof value === 'number') return value || null;
+
+    // Some Grist Desktop/reference paths surface a Ref as a numeric string.
+    // Normalize it exactly like the numeric row-id representation.
+    if (typeof value === 'string' && /^\s*\d+\s*$/.test(value)) {
+      return Number(value.trim()) || null;
+    }
+
+    if (Array.isArray(value) && value[0] === 'R') {
+      return Number(value[2]) || null;
+    }
+
+    return null;
+  }
+
+  function hasOwn(obj, key) {
+    return Object.prototype.hasOwnProperty.call(obj || {}, key);
+  }
+
+  function draftOr(fields, key, fallback) {
+    return hasOwn(fields, key) ? fields[key] : fallback;
+  }
+
+  function submittedOrCurrent(submittedValue, currentValue) {
+    return hasValue(submittedValue) ? displayValue(submittedValue) : (displayValue(currentValue) || '');
+  }
+
+  function reviewDefault(submittedValue, currentValue, hasCanonical) {
+    if (hasCanonical && hasValue(currentValue)) return displayValue(currentValue) || '';
+    return hasValue(submittedValue) ? displayValue(submittedValue) : (displayValue(currentValue) || '');
+  }
+
+  function locationLabel(value, locationsById) {
+    const rowId = refRowId(value);
+    if (!rowId) return displayValue(value) || '';
+
+    const location = locationsById.get(rowId);
+    return location ? (displayValue(location.Municipality) || String(rowId)) : String(rowId);
+  }
+
+  async function fetchCanonicalContext(record) {
+    const [submissionsData, providersData, programsData, locationsData] = await Promise.all([
+      grist.docApi.fetchTable('Provider_Submissions'),
+      grist.docApi.fetchTable('Providers'),
+      grist.docApi.fetchTable('Programs'),
+      grist.docApi.fetchTable('Locations')
+    ]);
+
+    const submissions = tableToRows(submissionsData);
+    const providers = tableToRows(providersData);
+    const programs = tableToRows(programsData);
+    const locations = tableToRows(locationsData);
+    const locationsById = new Map(locations.map(row => [row.id, row]));
+
+    const rawSubmission = submissions.find(row => row.id === record.id) || null;
+    const providerId = rawSubmission ? refRowId(rawSubmission.Existing_Provider) : null;
+    const programId = rawSubmission ? refRowId(rawSubmission.Existing_Program) : null;
+
+    return {
+      submission: rawSubmission,
+      provider: providerId ? (providers.find(row => row.id === providerId) || null) : null,
+      program: programId ? (programs.find(row => row.id === programId) || null) : null,
+      locationsById
+    };
+  }
+
+  function parseDraft(value) {
+    const raw = displayValue(value);
+    if (!raw) return null;
+
+    try {
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === 'object' ? parsed : null;
+    } catch (err) {
+      return null;
+    }
+  }
+
+  function setSaveStatus(message, kind) {
+    const element = document.getElementById('saveStatus');
+    element.textContent = message;
+    element.className = 'save-status' + (kind ? ' ' + kind : '');
+  }
+
+  function persistedPromotionMessage(record) {
+    if (!record) return null;
+    const result = displayValue(record.Promotion_Result);
+    const error = displayValue(record.Promotion_Error);
+
+    if (result === 'Partial') {
+      return {
+        kind: 'error',
+        text: 'PARTIAL PROMOTION — Provider may already have been created. ' +
+          (error ? 'Error: ' + error : 'Review Promotion_Error before taking any further action.')
+      };
+    }
+
+    if (result === 'Failed') {
+      return {
+        kind: 'error',
+        text: 'PROMOTION FAILED — ' +
+          (error ? error : 'Review Promotion_Error before retrying.')
+      };
+    }
+
+    if (result === 'Success') {
+      return {
+        kind: 'success',
+        text: 'Canonical promotion completed successfully.'
+      };
+    }
+
+    return null;
+  }
+
+  function markDirty() {
+    if (isRendering) return;
+    isDirty = true;
+    setSaveStatus('Unsaved changes. Save before selecting another submission.');
+    updateReadiness();
+  }
+
+  function nonBlank(value) {
+    return String(value ?? '').trim().length > 0;
+  }
+
+  function boolValue(value) {
+    return value === true || value === 1 || value === '1' || value === 'true';
+  }
+
+  function normalizeKey(value) {
+    return (displayValue(value) || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  }
+
+  function normalizeUrl(value) {
+    const raw = (displayValue(value) || '').trim().toLowerCase();
+    return raw.replace(/\/$/, '');
+  }
+
+  function choiceListCell(value) {
+    const values = normalizeChoiceListValue(value);
+    return values.length ? ['L', ...values] : null;
+  }
+
+  function dateTimeSeconds(value) {
+    if (typeof value === 'number' && Number.isFinite(value)) return value;
+    if (Array.isArray(value) && value[0] === 'D' && Number.isFinite(Number(value[1]))) {
+      return Number(value[1]);
+    }
+    const parsed = Date.parse(displayValue(value) || '');
+    return Number.isFinite(parsed) ? parsed / 1000 : null;
+  }
+
+  function dateInputValue(value) {
+    if (value === null || value === undefined || value === '') return '';
+    let millis = null;
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      millis = value * 1000;
+    } else if (Array.isArray(value) && value[0] === 'D' && Number.isFinite(Number(value[1]))) {
+      millis = Number(value[1]) * 1000;
+    } else {
+      const text = displayValue(value) || '';
+      if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text;
+      const parsed = Date.parse(text);
+      if (Number.isFinite(parsed)) millis = parsed;
+    }
+    return millis === null ? '' : new Date(millis).toISOString().slice(0, 10);
+  }
+
+  function dateOnlySeconds(value, label) {
+    if (!hasValue(value)) return null;
+    if (typeof value === 'number' && Number.isFinite(value)) return value;
+    const text = dateInputValue(value);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) {
+      throw new Error((label || 'Date') + ' must be a valid YYYY-MM-DD date.');
+    }
+    const parts = text.split('-').map(Number);
+    const millis = Date.UTC(parts[0], parts[1] - 1, parts[2]);
+    const check = new Date(millis).toISOString().slice(0, 10);
+    if (check !== text) {
+      throw new Error((label || 'Date') + ' must be a valid calendar date.');
+    }
+    return millis / 1000;
+  }
+
+  function createdRowId(result) {
+    if (typeof result === 'number' && result > 0) return result;
+    if (result && typeof result.id === 'number' && result.id > 0) return result.id;
+    if (result && Array.isArray(result.records) && result.records[0] && typeof result.records[0].id === 'number') {
+      return result.records[0].id;
+    }
+    throw new Error('Grist created the record but did not return a usable row ID.');
+  }
+
+  function requireText(value, label) {
+    const text = (displayValue(value) || '').trim();
+    if (!text) throw new Error(label + ' is required for promotion.');
+    return text;
+  }
+
+  function scalarCompare(value) {
+    return (displayValue(value) || '').trim();
+  }
+
+  function choiceCompare(value) {
+    return normalizeChoiceListValue(value).map(v => String(v).trim()).filter(Boolean);
+  }
+
+  function sameChoiceList(a, b) {
+    return JSON.stringify(choiceCompare(a)) === JSON.stringify(choiceCompare(b));
+  }
+
+  function sameFieldValue(field, currentValue, desiredValue) {
+    if (['Age_Band', 'Delivery_Mode', 'Days_Offered', 'Time_of_Day'].includes(field)) {
+      return sameChoiceList(currentValue, desiredValue);
+    }
+    if (field === 'Primary_Municipality') {
+      if (typeof desiredValue === 'number') {
+        return refRowId(currentValue) === desiredValue;
+      }
+      return normalizeKey(currentValue) === normalizeKey(desiredValue);
+    }
+    if (field === 'Provider') {
+      return refRowId(currentValue) === (typeof desiredValue === 'number' ? desiredValue : refRowId(desiredValue));
+    }
+    return scalarCompare(currentValue) === scalarCompare(desiredValue);
+  }
+
+  function friendlyCanonicalValue(field, value, locationsById) {
+    if (field === 'Primary_Municipality') {
+      return locationLabel(value, locationsById);
+    }
+    if (field === 'Provider') {
+      return refRowId(value);
+    }
+    if (['Age_Band', 'Delivery_Mode', 'Days_Offered', 'Time_of_Day'].includes(field)) {
+      return choiceCompare(value);
+    }
+    return displayValue(value) || '';
+  }
+
+  function buildBaseline(entity, locationsById) {
+    if (!entity) return null;
+    const result = {};
+    Object.keys(entity).forEach(field => {
+      if (field === 'id') return;
+      result[field] = friendlyCanonicalValue(field, entity[field], locationsById);
+    });
+    result.__row_id = entity.id;
+    return result;
+  }
+
+  function baselineMatchesLive(baseline, liveRow, fields, locationsById) {
+    if (!baseline || !liveRow) return false;
+    if (Number(baseline.__row_id) !== Number(liveRow.id)) return false;
+
+    return fields.every(field => {
+      const liveFriendly = friendlyCanonicalValue(field, liveRow[field], locationsById);
+      const base = baseline[field];
+
+      if (Array.isArray(liveFriendly) || Array.isArray(base)) {
+        return JSON.stringify(liveFriendly || []) === JSON.stringify(base || []);
+      }
+      return scalarCompare(liveFriendly) === scalarCompare(base);
+    });
+  }
+
+  function collectChangedFields(liveRow, desiredFields, locationsById) {
+    const changed = {};
+    const previous = {};
+    const applied = {};
+
+    Object.entries(desiredFields).forEach(([field, desiredValue]) => {
+      if (!sameFieldValue(field, liveRow[field], desiredValue)) {
+        changed[field] = desiredValue;
+        previous[field] = friendlyCanonicalValue(field, liveRow[field], locationsById);
+        applied[field] =
+          field === 'Primary_Municipality'
+            ? locationLabel(desiredValue, locationsById)
+            : (field === 'Provider'
+                ? desiredValue
+                : friendlyCanonicalValue(field, desiredValue, locationsById));
+      }
+    });
+
+    return {
+      changed,
+      previous,
+      applied,
+      fields: Object.keys(changed)
+    };
+  }
+
+  function resolveLocationRowId(locationText, locations, label) {
+    const key = normalizeKey(locationText);
+    if (!key) throw new Error(label + ' is required for promotion.');
+
+    // Grist reference values may occasionally surface in a saved draft as the
+    // referenced row id rather than the display label. Treat a numeric value
+    // as a valid Location only when that exact row exists.
+    if (/^\d+$/.test(key)) {
+      const rowId = Number(key);
+      const byId = locations.find(row => Number(row.id) === rowId);
+      if (byId) return byId.id;
+    }
+
+    const matches = locations.filter(row => normalizeKey(row.Municipality) === key);
+    if (matches.length === 1) return matches[0].id;
+    if (matches.length === 0) {
+      throw new Error(label + ' "' + locationText + '" does not exactly match a Municipality in Locations.');
+    }
+    throw new Error(label + ' "' + locationText + '" matches more than one Locations row. Resolve the duplicate before promotion.');
+  }
+
+  function resolveLocationText(locationValue, locations, label) {
+    const rowId = resolveLocationRowId(locationValue, locations, label);
+    const row = locations.find(item => Number(item.id) === Number(rowId));
+    const municipality = row && displayValue(row.Municipality);
+    if (!municipality) {
+      throw new Error(label + ' could not be normalized to a municipality label.');
+    }
+    return municipality;
+  }
+
+  async function fetchTableRows(tableId) {
+    return tableToRows(await grist.docApi.fetchTable(tableId));
+  }
+
+  async function fetchRowById(tableId, rowId) {
+    const rows = await fetchTableRows(tableId);
+    return rows.find(row => row.id === rowId) || null;
+  }
+
+  async function waitForCanonicalRow(tableId, rowId, idField) {
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const row = await fetchRowById(tableId, rowId);
+      if (row && (!idField || hasValue(row[idField]))) return row;
+      await new Promise(resolve => setTimeout(resolve, 120));
+    }
+    return fetchRowById(tableId, rowId);
+  }
+
+  function sourceSubmissionId(record) {
+    return displayValue(record && record.Submission_ID) || String(record && record.id || '');
+  }
+
+  function canonicalRowIdFromLog(row) {
+    const value = row && row.Canonical_Row_ID;
+    if (typeof value === 'number') return value;
+    const parsed = Number(displayValue(value));
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+  }
+
+  async function determinePromotionRecovery(record) {
+    const result = {
+      safeProviderResume: false,
+      repairBlankProvider: false,
+      providerRowId: null,
+      priorProgramFailure: null
+    };
+
+    if (!record) return result;
+
+    const providerRef = refRowId(record.Existing_Provider);
+    const programRef = refRowId(record.Existing_Program);
+    if (!providerRef || programRef) return result;
+
+    try {
+      const [logs, providers] = await Promise.all([
+        fetchTableRows('KB_Promotion_Log'),
+        fetchTableRows('Providers')
+      ]);
+
+      const sourceId = sourceSubmissionId(record);
+      const related = logs.filter(row =>
+        displayValue(row.Source_Submission_ID) === sourceId &&
+        displayValue(row.Submission_Type) === 'Provider Submission'
+      );
+
+      const providerSuccess = related.find(row =>
+        displayValue(row.Entity_Type) === 'Provider' &&
+        displayValue(row.Action) === 'Create' &&
+        displayValue(row.Result) === 'Success' &&
+        canonicalRowIdFromLog(row) === providerRef
+      );
+
+      const providerRow = providers.find(row => row.id === providerRef) || null;
+      const draft = parseDraft(record.Provider_Review_Draft);
+      const draftName = normalizeKey(draft && draft.fields && draft.fields.Provider_Name);
+      const rowName = normalizeKey(providerRow && providerRow.Provider_Name);
+      const rowWebsite = normalizeUrl(providerRow && providerRow.Website);
+      const rowLooksBlank = providerRow && !rowName && !rowWebsite;
+
+      if (providerSuccess && providerRow && draftName && (draftName === rowName || rowLooksBlank)) {
+        result.safeProviderResume = true;
+        result.repairBlankProvider = rowLooksBlank;
+        result.providerRowId = providerRef;
+      }
+
+      const programFailures = related
+        .filter(row =>
+          displayValue(row.Entity_Type) === 'Program' &&
+          displayValue(row.Action) === 'Create' &&
+          displayValue(row.Result) === 'Failed' &&
+          hasValue(row.Error_Detail)
+        )
+        .sort((a, b) => (Number(b.id) || 0) - (Number(a.id) || 0));
+
+      if (programFailures.length) {
+        result.priorProgramFailure = displayValue(programFailures[0].Error_Detail);
+      }
+    } catch (err) {
+      console.error('Could not determine promotion recovery state', err);
+    }
+
+    return result;
+  }
+
+  function validateReadiness() {
+    const checks = [];
+    const add = (level, message) => checks.push({ level, message });
+
+    if (!currentRecord) {
+      add('block', 'No submission is selected.');
+      return { ready: false, checks };
+    }
+
+    const providerAction = getControl('providerAction');
+    const programAction = getControl('programAction');
+    const providerMatched = hasValue(currentRecord.Existing_Provider);
+    const programMatched = hasValue(currentRecord.Existing_Program);
+    const fundingProgram = hasValue(getControl('g_final_fundingtype')) || hasValue(currentRecord.Funding_Type);
+
+    const providerDraftSaved = !!parseDraft(currentRecord.Provider_Review_Draft);
+    const programDraftSaved = !!parseDraft(currentRecord.Program_Review_Draft);
+    const draftSaved = providerDraftSaved && programDraftSaved && !isDirty;
+
+    add(
+      draftSaved ? 'ok' : 'block',
+      draftSaved
+        ? 'Review draft is saved.'
+        : (isDirty ? 'Review has unsaved changes.' : 'Review draft has not been saved yet.')
+    );
+
+    add(
+      providerAction ? 'ok' : 'block',
+      providerAction ? 'Provider decision: ' + providerAction + '.' : 'Provider action is not selected.'
+    );
+
+    add(
+      programAction ? 'ok' : 'block',
+      programAction ? 'Program decision: ' + programAction + '.' : 'Program action is not selected.'
+    );
+
+    if (providerAction === 'Create' && providerMatched) {
+      if (promotionRecovery.safeProviderResume && !programMatched) {
+        add(
+          'warn',
+          promotionRecovery.repairBlankProvider
+            ? 'An audited Provider row was created by this submission but its canonical fields are blank. Safe recovery will repair that same row from the approved draft, then continue with Program creation.'
+            : 'Provider was already created by this same approved submission. Safe resume will reuse that Provider and continue with Program creation.'
+        );
+      } else {
+        add('block', 'Provider is already matched; CREATE would risk a duplicate. Choose Update, No change, Verification required, or Reject.');
+      }
+    }
+
+    if (providerAction === 'Update' && !providerMatched) {
+      add('block', 'Provider action is UPDATE but no existing Provider is matched.');
+    }
+
+    if (providerAction === 'No change' && !providerMatched) {
+      add('block', 'Provider action is NO CHANGE but no existing Provider is matched.');
+    }
+
+    if (providerAction === 'Verification required') {
+      add('block', 'Provider-level verification is unresolved. Complete verification before promotion.');
+    }
+
+    if (providerAction === 'Reject') {
+      add('block', 'Provider action is REJECT. Rejected entity decisions are not promoted.');
+    }
+
+    if (programAction === 'Create' && programMatched) {
+      add('block', 'Program is already matched; CREATE would risk a duplicate. Choose Update, No change, Verification required, or Reject.');
+    }
+
+    if (programAction === 'Update' && !programMatched) {
+      add('block', 'Program action is UPDATE but no existing Program is matched.');
+    }
+
+    if (programAction === 'No change' && !programMatched) {
+      add('block', 'Program action is NO CHANGE but no existing Program is matched.');
+    }
+
+    if (programAction === 'Verification required') {
+      add('block', 'Program-level verification is unresolved. Complete verification before promotion.');
+    }
+
+    if (programAction === 'Reject') {
+      add('block', 'Program action is REJECT. Rejected entity decisions are not promoted.');
+    }
+
+    if (!providerMatched && ['Create', 'Update'].includes(programAction) && providerAction !== 'Create') {
+      add('block', 'The Program needs a Provider relationship. With no matched Provider, Provider action must be CREATE before the Program can be promoted.');
+    }
+
+    if (providerAction === 'Create') {
+      add(nonBlank(getControl('p_final_name')) ? 'ok' : 'block', 'New Provider has a Provider Name.');
+      add(nonBlank(getControl('p_final_website')) ? 'ok' : 'block', 'New Provider has a Website.');
+      add(nonBlank(getControl('p_final_orgtype')) ? 'ok' : 'block', 'New Provider has an Organization Type.');
+      if (!fundingProgram) {
+        add(nonBlank(getControl('p_final_municipality')) ? 'ok' : 'block', 'New Provider has a Primary Municipality.');
+      } else {
+        add('ok', 'Funding administrator may be national/provincial; Provider municipality is optional.');
+      }
+    }
+
+    if (providerAction === 'Update') {
+      add(nonBlank(getControl('p_final_name')) ? 'ok' : 'block', 'Updated Provider retains a Provider Name.');
+    }
+
+    if (programAction === 'Create') {
+      add(nonBlank(getControl('g_final_name')) ? 'ok' : 'block', 'New Program has a Program Name.');
+      add(nonBlank(getControl('g_final_summary')) ? 'ok' : 'block', 'New Program has a Program Summary.');
+      add(nonBlank(getControl('g_final_category')) ? 'ok' : 'block', 'New Program has a Program Category.');
+      if (fundingProgram) {
+        add(nonBlank(getControl('g_final_fundingtype')) ? 'ok' : 'block', 'Funding Program has a Funding Type.');
+        add(nonBlank(getControl('g_final_applicationstatus')) ? 'ok' : 'block', 'Funding Program has an Application Status.');
+        add(nonBlank(getControl('g_final_lastverified')) ? 'ok' : 'block', 'Funding Program has a Last Verified date.');
+      } else {
+        add(nonBlank(getControl('g_final_delivery')) ? 'ok' : 'block', 'New Program has a Delivery Mode.');
+        add(getChoiceList('g_final_age').length > 0 ? 'ok' : 'block', 'New Program has at least one Age Band.');
+        add(nonBlank(getControl('g_final_municipality')) ? 'ok' : 'block', 'New Program has a Primary Municipality for later Locations resolution.');
+      }
+    }
+
+    if (programAction === 'Update') {
+      add(nonBlank(getControl('g_final_name')) ? 'ok' : 'block', 'Updated Program retains a Program Name.');
+    }
+
+    const eligibilitySubmitted = hasValue(currentRecord.Eligibility_Information);
+    const fundingSubmitted = hasValue(currentRecord.Funding_Information);
+    const eligibilityDecision = getControl('c_decision_eligibility');
+    const fundingDecision = getControl('c_decision_funding');
+
+    if (eligibilitySubmitted) {
+      add(
+        eligibilityDecision ? (eligibilityDecision === 'Verification required' ? 'warn' : 'ok') : 'block',
+        eligibilityDecision
+          ? 'Eligibility claim decision: ' + eligibilityDecision + '.'
+          : 'Eligibility information was submitted but no claim decision is selected.'
+      );
+    }
+
+    if (fundingSubmitted) {
+      add(
+        fundingDecision ? (fundingDecision === 'Verification required' ? 'warn' : 'ok') : 'block',
+        fundingDecision
+          ? 'Funding claim decision: ' + fundingDecision + '.'
+          : 'Funding information was submitted but no claim decision is selected.'
+      );
+    }
+
+    if (eligibilityDecision === 'Verification required' || fundingDecision === 'Verification required') {
+      add('warn', 'Claim verification remains outside this promotion. Provider/Program promotion may proceed without promoting those unverified claims.');
+    }
+
+    const ready = !checks.some(check => check.level === 'block');
+    return { ready, checks };
+  }
+
+  function setReviewLocked(locked) {
+    document.querySelectorAll('.action-strip select').forEach(control => {
+      control.disabled = locked;
+    });
+
+    applyEntityActionState(locked);
+
+    const saveButton = document.getElementById('saveDraft');
+    if (saveButton) saveButton.disabled = locked;
+  }
+
+  function getEntityDisposition() {
+    const providerAction = getControl('providerAction');
+    const programAction = getControl('programAction');
+
+    if (providerAction === 'Verification required' || programAction === 'Verification required') {
+      return 'verification';
+    }
+    if (providerAction === 'Reject' || programAction === 'Reject') {
+      return 'reject';
+    }
+    if (providerAction === 'No change' && programAction === 'No change') {
+      return 'nochange';
+    }
+    return null;
+  }
+
+  function updateReadiness() {
+    const result = validateReadiness();
+    lastReadiness = result;
+
+    const list = document.getElementById('readinessList');
+    const headline = document.getElementById('readinessHeadline');
+    const readyButton = document.getElementById('markReady');
+    const approvalButton = document.getElementById('recordApproval');
+    const reopenButton = document.getElementById('reopenReview');
+    const dispositionButton = document.getElementById('finalizeDisposition');
+    const promoteButton = document.getElementById('promoteApproved');
+    const approvalStatus = document.getElementById('approvalStatus');
+    const promotionStatus = document.getElementById('promotionStatus');
+
+    if (!list || !headline || !readyButton || !approvalButton || !reopenButton || !dispositionButton || !promoteButton || !approvalStatus || !promotionStatus) return;
+
+    list.innerHTML = '';
+    result.checks.forEach(check => {
+      const item = document.createElement('li');
+      item.className = check.level;
+      item.textContent =
+        (check.level === 'ok' ? '✓ ' : check.level === 'warn' ? '⚠ ' : '✕ ') +
+        check.message;
+      list.appendChild(item);
+    });
+
+    const approved = currentRecord && boolValue(currentRecord.Promotion_Approved);
+    const status = currentRecord ? displayValue(currentRecord.Review_Status) : null;
+    const isReadyStatus = status === 'Ready to Promote';
+    const disposition = getEntityDisposition();
+    const draftsSaved =
+      currentRecord &&
+      !!parseDraft(currentRecord.Provider_Review_Draft) &&
+      !!parseDraft(currentRecord.Program_Review_Draft) &&
+      !isDirty;
+
+    if (status === 'Completed') {
+      if (disposition === 'reject') {
+        headline.textContent = 'Rejected review completed — no canonical changes were made.';
+      } else if (disposition === 'nochange') {
+        headline.textContent = 'No-change review completed — no canonical changes were required.';
+      } else {
+        headline.textContent = 'Review completed.';
+      }
+    } else if (status === 'Verification Required') {
+      headline.textContent = 'Review routed to Verification Required.';
+    } else if (disposition === 'verification' && !approved) {
+      headline.textContent = 'Review can be routed to Verification Required.';
+    } else if (disposition === 'reject' && !approved) {
+      headline.textContent = 'Review can be finalized as rejected.';
+    } else if (disposition === 'nochange' && !approved) {
+      headline.textContent = 'No canonical changes are required.';
+    } else if (approved) {
+      headline.textContent = 'Human approval recorded.';
+    } else if (result.ready && isReadyStatus) {
+      headline.textContent = 'Ready for human approval.';
+    } else if (result.ready) {
+      headline.textContent = 'Review passes validation and can be marked Ready to Promote.';
+    } else {
+      headline.textContent = 'Resolve the blocking items before promotion.';
+    }
+
+    readyButton.disabled = !!disposition || approved || !result.ready || isReadyStatus;
+    approvalButton.disabled = !!disposition || approved || !result.ready || !isReadyStatus || isDirty;
+
+    if (disposition === 'verification') {
+      dispositionButton.textContent = 'Send to Verification';
+    } else if (disposition === 'reject') {
+      dispositionButton.textContent = 'Finalize Rejection';
+    } else if (disposition === 'nochange') {
+      dispositionButton.textContent = 'Complete No-Change Review';
+    } else {
+      dispositionButton.textContent = 'Finalize Review Disposition';
+    }
+
+    const providerMatchedForDisposition = currentRecord && hasValue(currentRecord.Existing_Provider);
+    const programMatchedForDisposition = currentRecord && hasValue(currentRecord.Existing_Program);
+    const noChangeSafe =
+      disposition !== 'nochange' ||
+      (providerMatchedForDisposition && programMatchedForDisposition);
+
+    dispositionButton.disabled =
+      promotionInProgress ||
+      approved ||
+      !disposition ||
+      !draftsSaved ||
+      !noChangeSafe ||
+      status === 'Completed' ||
+      (disposition === 'verification' && status === 'Verification Required');
+
+    const providerAction = getControl('providerAction');
+    const programAction = getControl('programAction');
+    const createCreate = providerAction === 'Create' && programAction === 'Create';
+    const updatePair =
+      ['Update', 'No change'].includes(providerAction) &&
+      ['Update', 'No change'].includes(programAction) &&
+      (providerAction === 'Update' || programAction === 'Update');
+    const noExistingRefs =
+      currentRecord &&
+      !hasValue(currentRecord.Existing_Provider) &&
+      !hasValue(currentRecord.Existing_Program);
+    const safeResume =
+      currentRecord &&
+      promotionRecovery.safeProviderResume &&
+      hasValue(currentRecord.Existing_Provider) &&
+      !hasValue(currentRecord.Existing_Program);
+    const alreadySucceeded =
+      currentRecord &&
+      (displayValue(currentRecord.Promotion_Result) === 'Success' ||
+       displayValue(currentRecord.Review_Status) === 'Completed');
+
+    const promotionResult = currentRecord ? displayValue(currentRecord.Promotion_Result) : null;
+    const safeToReopen =
+      approved &&
+      isReadyStatus &&
+      !alreadySucceeded &&
+      promotionResult !== 'Partial' &&
+      (
+        updatePair ||
+        (createCreate && noExistingRefs)
+      );
+
+    reopenButton.disabled = promotionInProgress || !safeToReopen;
+
+    promoteButton.disabled =
+      promotionInProgress ||
+      !!disposition ||
+      !approved ||
+      !result.ready ||
+      !isReadyStatus ||
+      isDirty ||
+      !(createCreate || updatePair) ||
+      (createCreate && !(noExistingRefs || safeResume)) ||
+      (updatePair && (!hasValue(currentRecord.Existing_Provider) || !hasValue(currentRecord.Existing_Program))) ||
+      alreadySucceeded;
+
+    const persisted = currentRecord ? persistedPromotionMessage(currentRecord) : null;
+
+    if (promotionInProgress) {
+      promotionStatus.textContent = 'Promotion is running. Do not close or refresh the widget.';
+    } else if (status === 'Completed' && disposition === 'reject') {
+      promotionStatus.textContent = 'Rejection is final. No canonical Provider/Program records were changed and no promotion-log row was created for this disposition.';
+    } else if (status === 'Completed' && disposition === 'nochange') {
+      promotionStatus.textContent = 'No-change review is complete. Canonical Provider/Program records were left unchanged and no promotion-log row was created.';
+    } else if (status === 'Verification Required') {
+      promotionStatus.textContent = 'This review is waiting on verification. No canonical Provider/Program records have been changed.';
+    } else if (disposition === 'verification') {
+      promotionStatus.textContent = 'Entity-level verification is required. No canonical records will be changed; finalize this review to route it to Verification Required.';
+    } else if (disposition === 'reject') {
+      promotionStatus.textContent = 'Rejected entity decisions are not promoted. Finalizing will complete the review without canonical changes.';
+    } else if (disposition === 'nochange') {
+      promotionStatus.textContent = 'Both matched entities are No change. Finalizing will complete the review without canonical changes or promotion-log rows.';
+    } else if (persisted && displayValue(currentRecord.Promotion_Result) !== 'Success') {
+      promotionStatus.textContent = persisted.text;
+    } else if (alreadySucceeded) {
+      promotionStatus.textContent = 'Canonical promotion is already complete.';
+    } else if (approved && createCreate && safeResume && isReadyStatus && result.ready && !isDirty) {
+      promotionStatus.textContent =
+        (promotionRecovery.repairBlankProvider
+          ? 'Safe recovery is available: the Provider row created by this submission is blank and will be repaired from the approved draft before Program creation. '
+          : 'Safe resume is available: the Provider was already created by this submission and will be reused. ') +
+        (promotionRecovery.priorProgramFailure
+          ? 'Previous Program failure: ' + promotionRecovery.priorProgramFailure
+          : 'The widget will continue with Program creation.');
+    } else if (approved && createCreate && noExistingRefs && isReadyStatus && result.ready && !isDirty) {
+      promotionStatus.textContent = 'Approved Create/Create submission is ready for canonical promotion.';
+    } else if (approved && updatePair && isReadyStatus && result.ready && !isDirty) {
+      promotionStatus.textContent = 'Approved matched-record update is ready for canonical promotion. Only changed approved fields will be written.';
+    } else if (approved && createCreate && !(noExistingRefs || safeResume)) {
+      promotionStatus.textContent = 'Create/Create promotion is blocked because Existing Provider/Program references cannot be proven as this submission\'s own partial promotion.';
+    } else if (approved && !createCreate && !updatePair) {
+      promotionStatus.textContent = 'This phase supports Create/Create or matched Update/No change combinations with at least one Update.';
+    } else {
+      promotionStatus.textContent = 'Canonical promotion becomes available after readiness and human approval.';
+    }
+
+    if (approved) {
+      const who = displayValue(currentRecord.Approved_By) || 'Recorded approver';
+      const email = displayValue(currentRecord.Approved_By_Email);
+      const when = displayValue(currentRecord.Approved_On);
+      approvalStatus.textContent =
+        'Approved by ' + who +
+        (email ? ' (' + email + ')' : '') +
+        (when ? ' on ' + when : '') +
+        '. The review is locked.';
+      setReviewLocked(true);
+    } else if (status === 'Completed') {
+      approvalStatus.textContent = 'Review is completed. No further edits are allowed in this workflow.';
+      setReviewLocked(true);
+    } else {
+      approvalStatus.textContent =
+        isReadyStatus
+          ? 'Status is Ready to Promote. Record Human Approval only after reviewing the final saved draft.'
+          : (status === 'Verification Required'
+              ? 'Status is Verification Required. Resolve verification in the deep-review workflow, then save a revised decision here.'
+              : 'Approval is not yet recorded.');
+      setReviewLocked(false);
+    }
+  }
+
+  async function finalizeReviewDisposition() {
+    if (!currentRecord || !currentRecord.id || promotionInProgress) return;
+
+    const disposition = getEntityDisposition();
+    const providerAction = getControl('providerAction');
+    const programAction = getControl('programAction');
+
+    if (!disposition) {
+      setSaveStatus('No non-promotion disposition is selected.', 'error');
+      return;
+    }
+
+    if (isDirty ||
+        !parseDraft(currentRecord.Provider_Review_Draft) ||
+        !parseDraft(currentRecord.Program_Review_Draft)) {
+      setSaveStatus('Save the review draft before finalizing the disposition.', 'error');
+      return;
+    }
+
+    if (boolValue(currentRecord.Promotion_Approved)) {
+      setSaveStatus('This review is already approved for promotion. Reopen it before changing to a non-promotion disposition.', 'error');
+      return;
+    }
+
+    if (
+      disposition === 'nochange' &&
+      (!hasValue(currentRecord.Existing_Provider) || !hasValue(currentRecord.Existing_Program))
+    ) {
+      setSaveStatus('No change requires both an existing Provider and existing Program match.', 'error');
+      return;
+    }
+
+    let targetStatus = 'Completed';
+    let actionLabel = 'complete this review with no canonical changes';
+
+    if (disposition === 'verification') {
+      targetStatus = 'Verification Required';
+      actionLabel = 'route this review to Verification Required with no canonical changes';
+    } else if (disposition === 'reject') {
+      actionLabel = 'finalize this review as rejected with no canonical changes';
+    }
+
+    const confirmed = window.confirm(
+      'Confirm review disposition?\n\n' +
+      'Provider: ' + providerAction + '\n' +
+      'Program: ' + programAction + '\n\n' +
+      'This will ' + actionLabel + '.'
+    );
+    if (!confirmed) return;
+
+    const existingNotes = displayValue(currentRecord.Review_Notes) || '';
+    const dispositionNote =
+      '[8D.3] Provider=' + providerAction +
+      '; Program=' + programAction +
+      '; Result=' + targetStatus +
+      '; No canonical Provider/Program records were written.';
+    const reviewNotes = existingNotes
+      ? existingNotes + '\n' + dispositionNote
+      : dispositionNote;
+
+    try {
+      const updates = {
+        Review_Status: targetStatus,
+        Review_Notes: reviewNotes,
+        Promotion_Approved: false,
+        Promotion_Result: '',
+        Promotion_Error: '',
+        Applied_By: '',
+        Applied_On: null
+      };
+
+      await grist.docApi.applyUserActions([
+        ['UpdateRecord', 'Provider_Submissions', currentRecord.id, updates]
+      ]);
+
+      Object.assign(currentRecord, updates);
+      put('statusBadge', 'Status: ' + targetStatus);
+
+      if (disposition === 'verification') {
+        setSaveStatus(
+          'Review routed to Verification Required. No canonical records or promotion-log rows were created.',
+          'success'
+        );
+      } else if (disposition === 'reject') {
+        setSaveStatus(
+          'Rejection finalized. Review completed with no canonical changes.',
+          'success'
+        );
+      } else {
+        setSaveStatus(
+          'No-change review completed. No canonical records or promotion-log rows were created.',
+          'success'
+        );
+      }
+
+      updateReadiness();
+    } catch (err) {
+      console.error('Could not finalize review disposition', err);
+      setSaveStatus(
+        'Disposition finalization failed: ' + (err && err.message ? err.message : String(err)),
+        'error'
+      );
+    }
+  }
+
+  async function markReadyToPromote() {
+    if (!currentRecord || !currentRecord.id) return;
+
+    const result = validateReadiness();
+    if (!result.ready) {
+      setSaveStatus('Cannot mark ready: resolve the blocking readiness items first.', 'error');
+      updateReadiness();
+      return;
+    }
+
+    if (isDirty) {
+      setSaveStatus('Save the review draft before marking it Ready to Promote.', 'error');
+      return;
+    }
+
+    try {
+      await grist.docApi.applyUserActions([
+        ['UpdateRecord', 'Provider_Submissions', currentRecord.id, {
+          Review_Status: 'Ready to Promote'
+        }]
+      ]);
+
+      currentRecord.Review_Status = 'Ready to Promote';
+      put('statusBadge', 'Status: Ready to Promote');
+      setSaveStatus('Submission marked Ready to Promote.', 'success');
+      updateReadiness();
+    } catch (err) {
+      console.error(err);
+      setSaveStatus('Could not mark Ready to Promote: ' + (err && err.message ? err.message : String(err)), 'error');
+    }
+  }
+
+  async function recordHumanApproval() {
+    if (!currentRecord || !currentRecord.id) return;
+
+    const result = validateReadiness();
+    const status = displayValue(currentRecord.Review_Status);
+
+    if (!result.ready || status !== 'Ready to Promote' || isDirty) {
+      setSaveStatus('Approval blocked: the review must be saved, pass readiness validation, and have status Ready to Promote.', 'error');
+      updateReadiness();
+      return;
+    }
+
+    if (boolValue(currentRecord.Promotion_Approved)) {
+      setSaveStatus('Human approval is already recorded.', 'error');
+      return;
+    }
+
+    const confirmed = window.confirm(
+      'Record human approval for this saved review draft? Approval alone does not create canonical records. Use Promote Approved Submission after approval.'
+    );
+
+    if (!confirmed) return;
+
+    try {
+      await grist.docApi.applyUserActions([
+        ['UpdateRecord', 'Provider_Submissions', currentRecord.id, {
+          Promotion_Approved: true
+        }]
+      ]);
+
+      currentRecord.Promotion_Approved = true;
+      setSaveStatus('Human approval recorded. Use Promote Approved Submission when ready.', 'success');
+      updateReadiness();
+    } catch (err) {
+      console.error(err);
+      setSaveStatus('Approval failed: ' + (err && err.message ? err.message : String(err)), 'error');
+    }
+  }
+
+  async function reopenApprovedReview() {
+    if (!currentRecord || !currentRecord.id || promotionInProgress) return;
+
+    const providerAction = getControl('providerAction');
+    const programAction = getControl('programAction');
+    const createCreate = providerAction === 'Create' && programAction === 'Create';
+    const updatePair =
+      ['Update', 'No change'].includes(providerAction) &&
+      ['Update', 'No change'].includes(programAction) &&
+      (providerAction === 'Update' || programAction === 'Update');
+
+    const result = displayValue(currentRecord.Promotion_Result);
+    const status = displayValue(currentRecord.Review_Status);
+
+    if (!boolValue(currentRecord.Promotion_Approved) || status !== 'Ready to Promote') {
+      setSaveStatus('Only an approved Ready to Promote review can be reopened.', 'error');
+      return;
+    }
+
+    if (result === 'Success' || status === 'Completed') {
+      setSaveStatus('A successfully completed promotion cannot be reopened from this workflow.', 'error');
+      return;
+    }
+
+    if (result === 'Partial') {
+      setSaveStatus('This submission has a partial canonical promotion. Use the recovery path instead of reopening the approved review.', 'error');
+      return;
+    }
+
+    if (createCreate && (hasValue(currentRecord.Existing_Provider) || hasValue(currentRecord.Existing_Program))) {
+      setSaveStatus('Create/Create review cannot be reopened after a canonical reference has been created. Use the partial-promotion recovery path.', 'error');
+      return;
+    }
+
+    if (!createCreate && !updatePair) {
+      setSaveStatus('This approval state is not eligible for controlled reopening.', 'error');
+      return;
+    }
+
+    const confirmed = window.confirm(
+      'Reopen this approved review for correction?\n\n' +
+      'This will clear the current approval and application stamps, return the submission to In Review, and unlock the draft. ' +
+      'Existing KB_Promotion_Log failure entries will be preserved. You must save, mark ready, and approve again after making corrections.'
+    );
+    if (!confirmed) return;
+
+    try {
+      await grist.docApi.applyUserActions([
+        ['UpdateRecord', 'Provider_Submissions', currentRecord.id, {
+          Promotion_Approved: false,
+          Approved_By: '',
+          Approved_By_Email: '',
+          Approved_On: null,
+          Applied_By: '',
+          Applied_On: null,
+          Promotion_Result: '',
+          Promotion_Error: '',
+          Review_Status: 'In Review'
+        }]
+      ]);
+
+      currentRecord.Promotion_Approved = false;
+      currentRecord.Approved_By = '';
+      currentRecord.Approved_By_Email = '';
+      currentRecord.Approved_On = null;
+      currentRecord.Applied_By = '';
+      currentRecord.Applied_On = null;
+      currentRecord.Promotion_Result = '';
+      currentRecord.Promotion_Error = '';
+      currentRecord.Review_Status = 'In Review';
+
+      put('statusBadge', 'Status: In Review');
+      setReviewLocked(false);
+      setSaveStatus(
+        'Review reopened. Correct the draft, save it, mark Ready to Promote, and record a new human approval.',
+        'success'
+      );
+      updateReadiness();
+    } catch (err) {
+      console.error('Could not reopen approved review', err);
+      setSaveStatus(
+        'Reopen failed: ' + (err && err.message ? err.message : String(err)),
+        'error'
+      );
+    }
+  }
+
+  async function recordPromotionFailure(rawSubmission, entityType, message, anyCanonicalCreated) {
+    const now = Date.now() / 1000;
+    const appliedBy =
+      displayValue(rawSubmission.Approved_By) ||
+      displayValue(rawSubmission.Approved_By_Email) ||
+      'Approved reviewer';
+
+    const failureFields = {
+      Submission_Type: 'Provider Submission',
+      Source_Submission_ID: displayValue(rawSubmission.Submission_ID) || String(rawSubmission.id),
+      Entity_Type: entityType,
+      Action: 'Create',
+      Canonical_ID: '',
+      Canonical_Row_ID: null,
+      Approved_By: displayValue(rawSubmission.Approved_By) || '',
+      Approved_By_Email: displayValue(rawSubmission.Approved_By_Email) || '',
+      Approved_On: dateTimeSeconds(rawSubmission.Approved_On),
+      Applied_By: appliedBy,
+      Applied_On: now,
+      Result: 'Failed',
+      Changed_Fields: '',
+      Previous_Values: '{}',
+      Applied_Values: '{}',
+      Suggestion_Source: 'Rules',
+      Human_Decision: 'Approved',
+      Override_Reason: '',
+      Implementation_Version: '8D.1c',
+      Error_Detail: message
+    };
+
+    const existingError = displayValue(rawSubmission.Promotion_Error);
+    const storedError =
+      existingError && existingError !== message
+        ? existingError + ' | Latest attempt: ' + message
+        : message;
+
+    try {
+      await grist.docApi.applyUserActions([
+        ['UpdateRecord', 'Provider_Submissions', rawSubmission.id, {
+          Applied_By: appliedBy,
+          Applied_On: now,
+          Promotion_Result: anyCanonicalCreated ? 'Partial' : 'Failed',
+          Promotion_Error: storedError
+        }],
+        ['AddRecord', 'KB_Promotion_Log', null, failureFields]
+      ]);
+    } catch (auditErr) {
+      console.error('Could not write promotion failure audit', auditErr);
+    }
+  }
+
+  async function promoteCreateCreateSubmission() {
+    if (!currentRecord || !currentRecord.id || promotionInProgress) return;
+
+    promotionInProgress = true;
+    updateReadiness();
+    setSaveStatus('Rechecking approval and duplicate safeguards before canonical writes...');
+
+    let rawSubmission = null;
+    let providerRowId = null;
+    let programRowId = null;
+    let stage = 'Provider';
+
+    try {
+      if (isDirty) {
+        throw new Error('The review has unsaved changes. Promotion is blocked.');
+      }
+
+      const [submissionRows, providerRows, programRows, locations, promotionLogs] = await Promise.all([
+        fetchTableRows('Provider_Submissions'),
+        fetchTableRows('Providers'),
+        fetchTableRows('Programs'),
+        fetchTableRows('Locations'),
+        fetchTableRows('KB_Promotion_Log')
+      ]);
+
+      rawSubmission = submissionRows.find(row => row.id === currentRecord.id);
+      if (!rawSubmission) throw new Error('The selected Provider_Submissions row could not be reloaded.');
+
+      if (!boolValue(rawSubmission.Promotion_Approved)) {
+        throw new Error('Promotion_Approved is not true on the source submission.');
+      }
+      if (displayValue(rawSubmission.Review_Status) !== 'Ready to Promote') {
+        throw new Error('Review_Status must be Ready to Promote.');
+      }
+      if (displayValue(rawSubmission.Provider_Action) !== 'Create' ||
+          displayValue(rawSubmission.Program_Action) !== 'Create') {
+        throw new Error('Phase 8D.1 only supports Provider Action = Create and Program Action = Create.');
+      }
+      const sourceId = sourceSubmissionId(rawSubmission);
+      const existingProviderRowId = refRowId(rawSubmission.Existing_Provider);
+      const existingProgramRowId = refRowId(rawSubmission.Existing_Program);
+
+      if (existingProgramRowId) {
+        throw new Error('Existing Program reference is present. Phase 8D.1 will not create or resume over an already-linked Program.');
+      }
+
+      let resumeProvider = false;
+      let repairProvider = false;
+      if (existingProviderRowId) {
+        const relatedProviderSuccess = promotionLogs.find(row =>
+          displayValue(row.Source_Submission_ID) === sourceId &&
+          displayValue(row.Submission_Type) === 'Provider Submission' &&
+          displayValue(row.Entity_Type) === 'Provider' &&
+          displayValue(row.Action) === 'Create' &&
+          displayValue(row.Result) === 'Success' &&
+          canonicalRowIdFromLog(row) === existingProviderRowId
+        );
+
+        const existingProviderRow = providerRows.find(row => row.id === existingProviderRowId) || null;
+        const providerDraftForCheck = parseDraft(rawSubmission.Provider_Review_Draft);
+        const draftProviderName = normalizeKey(
+          providerDraftForCheck && providerDraftForCheck.fields && providerDraftForCheck.fields.Provider_Name
+        );
+
+        const existingProviderName = normalizeKey(existingProviderRow && existingProviderRow.Provider_Name);
+        const existingProviderWebsite = normalizeUrl(existingProviderRow && existingProviderRow.Website);
+        const existingProviderLooksBlank =
+          existingProviderRow &&
+          !existingProviderName &&
+          !existingProviderWebsite;
+
+        if (
+          relatedProviderSuccess &&
+          existingProviderRow &&
+          draftProviderName &&
+          (existingProviderName === draftProviderName || existingProviderLooksBlank)
+        ) {
+          resumeProvider = true;
+          repairProvider = existingProviderLooksBlank;
+        } else {
+          throw new Error(
+            'Existing Provider reference is present but cannot be proven as the Provider created by this submission. Manual review is required before retry.'
+          );
+        }
+      }
+      if (!hasValue(rawSubmission.Approved_By) ||
+          !hasValue(rawSubmission.Approved_By_Email) ||
+          !hasValue(rawSubmission.Approved_On)) {
+        throw new Error('Approval stamps are incomplete. Approved_By, Approved_By_Email, and Approved_On must all be populated.');
+      }
+      if (displayValue(rawSubmission.Promotion_Result) === 'Success' ||
+          displayValue(rawSubmission.Review_Status) === 'Completed') {
+        throw new Error('This submission has already been promoted.');
+      }
+
+      const providerDraft = parseDraft(rawSubmission.Provider_Review_Draft);
+      const programDraft = parseDraft(rawSubmission.Program_Review_Draft);
+      if (!providerDraft || !programDraft) {
+        throw new Error('Saved Provider and Program review drafts are required.');
+      }
+      if (providerDraft.action !== 'Create' || programDraft.action !== 'Create') {
+        throw new Error('Saved review draft actions must both be Create.');
+      }
+
+      const p = providerDraft.fields || {};
+      const g = programDraft.fields || {};
+
+      const providerName = requireText(p.Provider_Name, 'Provider Name');
+      const providerWebsite = requireText(p.Website, 'Provider Website');
+      const providerOrgType = requireText(p.Organization_Type, 'Provider Organization Type');
+      const fundingProgram = nonBlank(g.Funding_Type);
+      const providerMunicipalityText = fundingProgram
+        ? scalarCompare(p.Primary_Municipality)
+        : requireText(p.Primary_Municipality, 'Provider Primary Municipality');
+
+      const programName = requireText(g.Program_Name, 'Program Name');
+      const programSummary = requireText(g.Program_Summary, 'Program Summary');
+      const programCategory = requireText(g.Program_Category, 'Program Category');
+      const programDelivery = fundingProgram
+        ? scalarCompare(g.Delivery_Mode)
+        : requireText(g.Delivery_Mode, 'Program Delivery Mode');
+      const ageBands = normalizeChoiceListValue(g.Age_Band);
+      if (!fundingProgram && !ageBands.length) throw new Error('Program Age Band is required.');
+      const programMunicipalityText = fundingProgram
+        ? scalarCompare(g.Primary_Municipality)
+        : requireText(g.Primary_Municipality, 'Program Primary Municipality');
+
+      const providerMunicipalityCanonicalText = providerMunicipalityText
+        ? resolveLocationText(providerMunicipalityText, locations, 'Provider Primary Municipality')
+        : '';
+      const programMunicipalityId = programMunicipalityText
+        ? resolveLocationRowId(programMunicipalityText, locations, 'Program Primary Municipality')
+        : null;
+
+      if (fundingProgram) {
+        requireText(g.Application_Status, 'Funding Program Application Status');
+        if (!dateInputValue(g.Last_Verified_On)) {
+          throw new Error('Funding Program Last Verified date is required.');
+        }
+      }
+
+      const providerNameKey = normalizeKey(providerName);
+      const providerUrlKey = normalizeUrl(providerWebsite);
+      const duplicateProvider = providerRows.find(row =>
+        normalizeKey(row.Provider_Name) === providerNameKey ||
+        (providerUrlKey && normalizeUrl(row.Website) === providerUrlKey)
+      );
+      if (!resumeProvider && duplicateProvider) {
+        throw new Error(
+          'Duplicate safeguard: a canonical Provider already matches this name or website (row ' +
+          duplicateProvider.id + '). Match/review that Provider instead of creating a new one.'
+        );
+      }
+
+      const programUrlKey = normalizeUrl(g.Program_URL);
+      const providerForProgram = resumeProvider ? existingProviderRowId : null;
+      const duplicateProgram = programRows.find(row => {
+        const sameUrl = programUrlKey && normalizeUrl(row.Program_URL) === programUrlKey;
+        const sameName = normalizeKey(row.Program_Name) === normalizeKey(programName);
+        const rowProviderId = refRowId(row.Provider);
+        const sameProvider = providerForProgram ? rowProviderId === providerForProgram : false;
+        return sameUrl || (sameProvider && sameName);
+      });
+
+      if (duplicateProgram) {
+        throw new Error(
+          'Duplicate safeguard: a canonical Program already matches this provider/name or Program_URL (row ' +
+          duplicateProgram.id + '). Do not create another Program; reconcile the existing row first.'
+        );
+      }
+
+      const confirmed = window.confirm(
+        (resumeProvider ? 'Resume this partial promotion now?\n\n' : 'Promote this approved submission now?\n\n') +
+        'Provider: ' + providerName + '\n' +
+        'Program: ' + programName + '\n\n' +
+        (repairProvider
+          ? 'The audited blank Provider row created by this same submission will be repaired from the approved draft, then the missing Program will be created. '
+          : (resumeProvider
+              ? 'The existing Provider created by this same submission will be reused; only the missing Program will be created. '
+              : 'This will create live canonical Provider and Program records plus audit-log entries. ')) +
+        'Eligibility and funding claims marked Verification required will remain unpromoted.'
+      );
+      if (!confirmed) {
+        setSaveStatus('Promotion cancelled. No canonical records were created.');
+        return;
+      }
+
+      const appliedBy =
+        displayValue(rawSubmission.Approved_By) ||
+        displayValue(rawSubmission.Approved_By_Email) ||
+        'Approved reviewer';
+
+      let providerCanonical = null;
+      let providerCanonicalId = '';
+      const providerFields = {
+        Provider_Name: providerName,
+        Organization_Type: providerOrgType,
+        Website: providerWebsite,
+        Information_Source: requireText(p.Information_Source, 'Provider Information Source'),
+        Confidence_Status: requireText(p.Confidence_Status, 'Provider Confidence Status'),
+        Provider_Participation_Level: requireText(p.Provider_Participation_Level, 'Provider Participation Level')
+      };
+      if (providerMunicipalityCanonicalText) providerFields.Primary_Municipality = providerMunicipalityCanonicalText;
+      if (nonBlank(p.Primary_Email)) providerFields.Primary_Email = String(p.Primary_Email).trim();
+
+      if (resumeProvider) {
+        providerRowId = existingProviderRowId;
+        providerCanonical = providerRows.find(row => row.id === providerRowId) || null;
+        if (!providerCanonical) {
+          throw new Error('Safe resume expected the previously created Provider row, but it no longer exists.');
+        }
+
+        if (repairProvider) {
+          setSaveStatus('Repairing the audited blank Provider row from the approved draft...');
+
+          await grist.docApi.applyUserActions([
+            ['UpdateRecord', 'Providers', providerRowId, providerFields]
+          ]);
+
+          providerCanonical = await waitForCanonicalRow('Providers', providerRowId, 'Provider_ID');
+          if (!providerCanonical || normalizeKey(providerCanonical.Provider_Name) !== normalizeKey(providerName)) {
+            throw new Error('The blank Provider row could not be repaired with the approved Provider draft.');
+          }
+
+          providerCanonicalId = displayValue(providerCanonical.Provider_ID) || '';
+          const nowRepair = Date.now() / 1000;
+          await grist.docApi.applyUserActions([
+            ['AddRecord', 'KB_Promotion_Log', null, {
+              Submission_Type: 'Provider Submission',
+              Source_Submission_ID: displayValue(rawSubmission.Submission_ID) || String(rawSubmission.id),
+              Entity_Type: 'Provider',
+              Action: 'Update',
+              Canonical_ID: providerCanonicalId,
+              Canonical_Row_ID: providerRowId,
+              Approved_By: displayValue(rawSubmission.Approved_By) || '',
+              Approved_By_Email: displayValue(rawSubmission.Approved_By_Email) || '',
+              Approved_On: dateTimeSeconds(rawSubmission.Approved_On),
+              Applied_By: appliedBy,
+              Applied_On: nowRepair,
+              Result: 'Success',
+              Changed_Fields: Object.keys(providerFields).join('\n'),
+              Previous_Values: JSON.stringify({ Provider_Name: '', Website: '' }),
+              Applied_Values: JSON.stringify({
+                ...providerFields,
+                Primary_Municipality_Label: providerMunicipalityText
+              }),
+              Suggestion_Source: displayValue(providerDraft.suggestion_source) || 'Rules',
+              Human_Decision: 'Approved',
+              Override_Reason: 'Recovery repair of blank Provider row created during earlier Phase 8D.1 promotion attempt.',
+              Implementation_Version: '8D.1c',
+              Error_Detail: ''
+            }]
+          ]);
+
+          setSaveStatus(
+            'Provider repaired successfully. Continuing with Program creation...'
+          );
+        } else {
+          providerCanonicalId = displayValue(providerCanonical.Provider_ID) || '';
+          setSaveStatus(
+            'Safe resume verified. Reusing ' +
+            (providerCanonicalId || 'Provider row ' + providerRowId) +
+            ' and continuing with Program creation...'
+          );
+        }
+      } else {
+        setSaveStatus('Creating canonical Provider...');
+        const providerCreated = await grist.getTable('Providers').create(
+          { fields: providerFields },
+          { parseStrings: false }
+        );
+        providerRowId = createdRowId(providerCreated);
+
+        // Defensive write-through for Grist Desktop builds: explicitly update the
+        // returned row with the approved values, then verify the canonical row.
+        await grist.docApi.applyUserActions([
+          ['UpdateRecord', 'Providers', providerRowId, providerFields]
+        ]);
+
+        providerCanonical = await waitForCanonicalRow('Providers', providerRowId, 'Provider_ID');
+        if (!providerCanonical || normalizeKey(providerCanonical.Provider_Name) !== normalizeKey(providerName)) {
+          throw new Error('Provider row was created but its approved field values were not persisted.');
+        }
+
+        const nowProvider = Date.now() / 1000;
+        providerCanonicalId = displayValue(providerCanonical.Provider_ID) || '';
+        const providerAuditValues = {
+          ...providerFields,
+          Primary_Municipality_Label: providerMunicipalityText
+        };
+
+        await grist.docApi.applyUserActions([
+          ['UpdateRecord', 'Provider_Submissions', rawSubmission.id, {
+            Existing_Provider: providerRowId
+          }],
+          ['AddRecord', 'KB_Promotion_Log', null, {
+            Submission_Type: 'Provider Submission',
+            Source_Submission_ID: displayValue(rawSubmission.Submission_ID) || String(rawSubmission.id),
+            Entity_Type: 'Provider',
+            Action: 'Create',
+            Canonical_ID: providerCanonicalId,
+            Canonical_Row_ID: providerRowId,
+            Approved_By: displayValue(rawSubmission.Approved_By) || '',
+            Approved_By_Email: displayValue(rawSubmission.Approved_By_Email) || '',
+            Approved_On: dateTimeSeconds(rawSubmission.Approved_On),
+            Applied_By: appliedBy,
+            Applied_On: nowProvider,
+            Result: 'Success',
+            Changed_Fields: Object.keys(providerFields).join('\n'),
+            Previous_Values: '{}',
+            Applied_Values: JSON.stringify(providerAuditValues),
+            Suggestion_Source: displayValue(providerDraft.suggestion_source) || 'Rules',
+            Human_Decision: 'Approved',
+            Override_Reason: '',
+            Implementation_Version: '8D.1c',
+            Error_Detail: ''
+          }]
+        ]);
+      }
+
+      stage = 'Program';
+      setSaveStatus(
+        resumeProvider
+          ? 'Provider safely reused. Creating missing linked canonical Program...'
+          : 'Provider created. Creating linked canonical Program...'
+      );
+
+      const programFields = {
+        Provider: providerRowId,
+        Program_Name: programName,
+        Program_Summary: programSummary,
+        Program_Category: programCategory,
+        Information_Source: requireText(g.Information_Source, 'Program Information Source'),
+        Confidence_Status: requireText(g.Confidence_Status, 'Program Confidence Status')
+      };
+
+      if (programDelivery) programFields.Delivery_Mode = choiceListCell([programDelivery]);
+      if (ageBands.length) programFields.Age_Band = choiceListCell(ageBands);
+      if (programMunicipalityId) programFields.Primary_Municipality = programMunicipalityId;
+      if (nonBlank(g.Program_URL)) programFields.Program_URL = String(g.Program_URL).trim();
+      if (nonBlank(g.Days_Offered)) programFields.Days_Offered = choiceListCell(g.Days_Offered);
+      if (nonBlank(g.Time_of_Day)) programFields.Time_of_Day = choiceListCell(g.Time_of_Day);
+      if (nonBlank(g.Cost_Notes)) programFields.Cost_Notes = String(g.Cost_Notes).trim();
+      if (nonBlank(g.Cost_Basis)) programFields.Cost_Basis = String(g.Cost_Basis).trim();
+      if (nonBlank(g.Funding_Type)) programFields.Funding_Type = String(g.Funding_Type).trim();
+      if (nonBlank(g.Funding_Maximum)) programFields.Funding_Maximum = String(g.Funding_Maximum).trim();
+      if (nonBlank(g.Application_Status)) programFields.Application_Status = String(g.Application_Status).trim();
+      if (nonBlank(g.Application_Deadline)) programFields.Application_Deadline = String(g.Application_Deadline).trim();
+      if (nonBlank(g.Means_Tested)) programFields.Means_Tested = String(g.Means_Tested).trim();
+      if (nonBlank(g.Reimbursement_Based)) programFields.Reimbursement_Based = String(g.Reimbursement_Based).trim();
+      if (nonBlank(g.Last_Verified_On)) programFields.Last_Verified_On = dateOnlySeconds(g.Last_Verified_On, 'Last Verified On');
+
+      const programCreated = await grist.getTable('Programs').create(
+        { fields: programFields },
+        { parseStrings: false }
+      );
+      programRowId = createdRowId(programCreated);
+
+      // Same defensive write-through used for Provider creation.
+      await grist.docApi.applyUserActions([
+        ['UpdateRecord', 'Programs', programRowId, programFields]
+      ]);
+
+      const programCanonical = await waitForCanonicalRow('Programs', programRowId, 'Program_ID');
+      if (!programCanonical || normalizeKey(programCanonical.Program_Name) !== normalizeKey(programName)) {
+        throw new Error('Program row was created but its approved field values were not persisted.');
+      }
+
+      const nowProgram = Date.now() / 1000;
+      const programCanonicalId = displayValue(programCanonical.Program_ID) || '';
+      const programAuditValues = {
+        ...programFields,
+        Provider_Canonical_ID: providerCanonicalId
+      };
+      if (programMunicipalityText) programAuditValues.Primary_Municipality_Label = programMunicipalityText;
+
+      await grist.docApi.applyUserActions([
+        ['UpdateRecord', 'Provider_Submissions', rawSubmission.id, {
+          Existing_Program: programRowId,
+          Applied_By: appliedBy,
+          Applied_On: nowProgram,
+          Promotion_Result: 'Success',
+          Promotion_Error: '',
+          Review_Status: 'Completed'
+        }],
+        ['AddRecord', 'KB_Promotion_Log', null, {
+          Submission_Type: 'Provider Submission',
+          Source_Submission_ID: displayValue(rawSubmission.Submission_ID) || String(rawSubmission.id),
+          Entity_Type: 'Program',
+          Action: 'Create',
+          Canonical_ID: programCanonicalId,
+          Canonical_Row_ID: programRowId,
+          Approved_By: displayValue(rawSubmission.Approved_By) || '',
+          Approved_By_Email: displayValue(rawSubmission.Approved_By_Email) || '',
+          Approved_On: dateTimeSeconds(rawSubmission.Approved_On),
+          Applied_By: appliedBy,
+          Applied_On: nowProgram,
+          Result: 'Success',
+          Changed_Fields: Object.keys(programFields).join('\n'),
+          Previous_Values: '{}',
+          Applied_Values: JSON.stringify(programAuditValues),
+          Suggestion_Source: displayValue(programDraft.suggestion_source) || 'Rules',
+          Human_Decision: 'Approved',
+          Override_Reason: '',
+          Implementation_Version: '8D.1c',
+          Error_Detail: ''
+        }]
+      ]);
+
+      currentRecord.Existing_Provider = providerRowId;
+      currentRecord.Existing_Program = programRowId;
+      currentRecord.Applied_By = appliedBy;
+      currentRecord.Applied_On = nowProgram;
+      currentRecord.Promotion_Result = 'Success';
+      currentRecord.Promotion_Error = '';
+      currentRecord.Review_Status = 'Completed';
+      promotionRecovery = {
+        safeProviderResume: false,
+        repairBlankProvider: false,
+        providerRowId: null,
+        priorProgramFailure: null
+      };
+
+      put('statusBadge', 'Status: Completed');
+      put('providerMatchBadge', 'Provider: matched');
+      put('programMatchBadge', 'Program: matched');
+      setSaveStatus(
+        'Promotion complete: ' +
+        (providerCanonicalId || 'Provider row ' + providerRowId) +
+        (resumeProvider ? ' reused; ' : ' created; ') +
+        (programCanonicalId || 'Program row ' + programRowId) +
+        ' created and audit logged.',
+        'success'
+      );
+    } catch (err) {
+      console.error('Phase 8D.1 promotion failed', err);
+      const message = err && err.message ? err.message : String(err);
+      if (rawSubmission) {
+        await recordPromotionFailure(
+          rawSubmission,
+          stage,
+          message,
+          Boolean(providerRowId || programRowId)
+        );
+      }
+      const failureMessage =
+        'Promotion stopped at ' + stage + ': ' + message +
+        (providerRowId || programRowId
+          ? ' A canonical record may already exist; do not manually retry or create duplicates until this is reviewed.'
+          : '');
+      setSaveStatus(failureMessage, 'error');
+      window.alert(failureMessage);
+    } finally {
+      promotionInProgress = false;
+      updateReadiness();
+    }
+  }
+
+  async function recordUpdatePromotionFailure(rawSubmission, entityType, action, message) {
+    const now = Date.now() / 1000;
+    const appliedBy =
+      displayValue(rawSubmission.Approved_By) ||
+      displayValue(rawSubmission.Approved_By_Email) ||
+      'Approved reviewer';
+
+    try {
+      await grist.docApi.applyUserActions([
+        ['UpdateRecord', 'Provider_Submissions', rawSubmission.id, {
+          Applied_By: appliedBy,
+          Applied_On: now,
+          Promotion_Result: 'Failed',
+          Promotion_Error: message
+        }],
+        ['AddRecord', 'KB_Promotion_Log', null, {
+          Submission_Type: 'Provider Submission',
+          Source_Submission_ID: sourceSubmissionId(rawSubmission),
+          Entity_Type: entityType,
+          Action: action || 'Update',
+          Canonical_ID: '',
+          Canonical_Row_ID: null,
+          Approved_By: displayValue(rawSubmission.Approved_By) || '',
+          Approved_By_Email: displayValue(rawSubmission.Approved_By_Email) || '',
+          Approved_On: dateTimeSeconds(rawSubmission.Approved_On),
+          Applied_By: appliedBy,
+          Applied_On: now,
+          Result: 'Failed',
+          Changed_Fields: '',
+          Previous_Values: '{}',
+          Applied_Values: '{}',
+          Suggestion_Source: 'Rules',
+          Human_Decision: 'Approved',
+          Override_Reason: '',
+          Implementation_Version: '8D.2e',
+          Error_Detail: message
+        }]
+      ]);
+    } catch (auditErr) {
+      console.error('Could not write update-promotion failure audit', auditErr);
+    }
+  }
+
+
+  async function promoteExistingProviderCreateProgram() {
+    if (!currentRecord || !currentRecord.id || promotionInProgress) return;
+
+    promotionInProgress = true;
+    updateReadiness();
+    setSaveStatus('Rechecking existing Provider and approved new Program before canonical write...');
+
+    let rawSubmission = null;
+    let programRowId = null;
+
+    try {
+      if (isDirty) throw new Error('The review has unsaved changes. Promotion is blocked.');
+
+      const [submissionRows, providerRows, programRows, locations] = await Promise.all([
+        fetchTableRows('Provider_Submissions'),
+        fetchTableRows('Providers'),
+        fetchTableRows('Programs'),
+        fetchTableRows('Locations')
+      ]);
+
+      rawSubmission = submissionRows.find(row => row.id === currentRecord.id);
+      if (!rawSubmission) throw new Error('The selected Provider_Submissions row could not be reloaded.');
+      if (!boolValue(rawSubmission.Promotion_Approved)) throw new Error('Promotion_Approved is not true on the source submission.');
+      if (displayValue(rawSubmission.Review_Status) !== 'Ready to Promote') throw new Error('Review_Status must be Ready to Promote.');
+      if (displayValue(rawSubmission.Provider_Action) !== 'No change' ||
+          displayValue(rawSubmission.Program_Action) !== 'Create') {
+        throw new Error('This path requires Provider Action = No change and Program Action = Create.');
+      }
+      if (!hasValue(rawSubmission.Approved_By) ||
+          !hasValue(rawSubmission.Approved_By_Email) ||
+          !hasValue(rawSubmission.Approved_On)) {
+        throw new Error('Approval stamps are incomplete.');
+      }
+      if (displayValue(rawSubmission.Promotion_Result) === 'Success' ||
+          displayValue(rawSubmission.Review_Status) === 'Completed') {
+        throw new Error('This submission has already been promoted.');
+      }
+
+      const providerRowId = refRowId(rawSubmission.Existing_Provider);
+      const existingProgramRowId = refRowId(rawSubmission.Existing_Program);
+      if (!providerRowId) throw new Error('Provider Action = No change requires an Existing_Provider reference.');
+      if (existingProgramRowId) throw new Error('Program Action = Create cannot be used when Existing_Program is already populated.');
+
+      const liveProvider = providerRows.find(row => row.id === providerRowId) || null;
+      if (!liveProvider) throw new Error('The matched existing Provider no longer exists.');
+
+      const providerDraft = parseDraft(rawSubmission.Provider_Review_Draft);
+      const programDraft = parseDraft(rawSubmission.Program_Review_Draft);
+      if (!providerDraft || !programDraft) throw new Error('Saved Provider and Program review drafts are required.');
+      if (providerDraft.action !== 'No change' || programDraft.action !== 'Create') {
+        throw new Error('Saved review draft actions no longer match the approved submission actions.');
+      }
+
+      const g = programDraft.fields || {};
+      const fundingProgram = nonBlank(g.Funding_Type);
+      const programName = requireText(g.Program_Name, 'Program Name');
+      const programSummary = requireText(g.Program_Summary, 'Program Summary');
+      const programCategory = requireText(g.Program_Category, 'Program Category');
+      const programDelivery = fundingProgram ? scalarCompare(g.Delivery_Mode) : requireText(g.Delivery_Mode, 'Program Delivery Mode');
+      const ageBands = normalizeChoiceListValue(g.Age_Band);
+      if (!fundingProgram && !ageBands.length) throw new Error('Program Age Band is required.');
+      const programMunicipalityText = fundingProgram
+        ? scalarCompare(g.Primary_Municipality)
+        : requireText(g.Primary_Municipality, 'Program Primary Municipality');
+      const programMunicipalityId = programMunicipalityText
+        ? resolveLocationRowId(programMunicipalityText, locations, 'Program Primary Municipality')
+        : null;
+
+      if (fundingProgram) {
+        requireText(g.Application_Status, 'Funding Program Application Status');
+        if (!dateInputValue(g.Last_Verified_On)) throw new Error('Funding Program Last Verified date is required.');
+      }
+
+      const programUrlKey = normalizeUrl(g.Program_URL);
+      const duplicateProgram = programRows.find(row => {
+        const sameUrl = programUrlKey && normalizeUrl(row.Program_URL) === programUrlKey;
+        const sameName = normalizeKey(row.Program_Name) === normalizeKey(programName);
+        const sameProvider = refRowId(row.Provider) === providerRowId;
+        return sameUrl || (sameProvider && sameName);
+      });
+      if (duplicateProgram) {
+        throw new Error(
+          'Duplicate safeguard: a canonical Program already matches this provider/name or Program_URL (row ' +
+          duplicateProgram.id + '). Reconcile the existing row instead of creating another Program.'
+        );
+      }
+
+      const confirmed = window.confirm(
+        'Create this approved Program under the matched Provider?\n\n' +
+        'Provider: ' + (displayValue(liveProvider.Provider_Name) || 'Provider row ' + providerRowId) + '\n' +
+        'Program: ' + programName + '\n\n' +
+        'The Provider will not be modified. A new canonical Program and audit-log entry will be created.'
+      );
+      if (!confirmed) {
+        setSaveStatus('Promotion cancelled. No canonical records were created.');
+        return;
+      }
+
+      const programFields = {
+        Provider: providerRowId,
+        Program_Name: programName,
+        Program_Summary: programSummary,
+        Program_Category: programCategory,
+        Information_Source: requireText(g.Information_Source, 'Program Information Source'),
+        Confidence_Status: requireText(g.Confidence_Status, 'Program Confidence Status')
+      };
+      if (programDelivery) programFields.Delivery_Mode = choiceListCell([programDelivery]);
+      if (ageBands.length) programFields.Age_Band = choiceListCell(ageBands);
+      if (programMunicipalityId) programFields.Primary_Municipality = programMunicipalityId;
+      if (nonBlank(g.Program_URL)) programFields.Program_URL = String(g.Program_URL).trim();
+      if (nonBlank(g.Days_Offered)) programFields.Days_Offered = choiceListCell(g.Days_Offered);
+      if (nonBlank(g.Time_of_Day)) programFields.Time_of_Day = choiceListCell(g.Time_of_Day);
+      if (nonBlank(g.Cost_Notes)) programFields.Cost_Notes = String(g.Cost_Notes).trim();
+      if (nonBlank(g.Cost_Basis)) programFields.Cost_Basis = String(g.Cost_Basis).trim();
+      if (nonBlank(g.Funding_Type)) programFields.Funding_Type = String(g.Funding_Type).trim();
+      if (nonBlank(g.Funding_Maximum)) programFields.Funding_Maximum = String(g.Funding_Maximum).trim();
+      if (nonBlank(g.Application_Status)) programFields.Application_Status = String(g.Application_Status).trim();
+      if (nonBlank(g.Application_Deadline)) programFields.Application_Deadline = String(g.Application_Deadline).trim();
+      if (nonBlank(g.Means_Tested)) programFields.Means_Tested = String(g.Means_Tested).trim();
+      if (nonBlank(g.Reimbursement_Based)) programFields.Reimbursement_Based = String(g.Reimbursement_Based).trim();
+      if (nonBlank(g.Last_Verified_On)) programFields.Last_Verified_On = dateOnlySeconds(g.Last_Verified_On, 'Last Verified On');
+
+      const created = await grist.getTable('Programs').create(
+        { fields: programFields },
+        { parseStrings: false }
+      );
+      programRowId = createdRowId(created);
+      await grist.docApi.applyUserActions([
+        ['UpdateRecord', 'Programs', programRowId, programFields]
+      ]);
+
+      const programCanonical = await waitForCanonicalRow('Programs', programRowId, 'Program_ID');
+      if (!programCanonical || normalizeKey(programCanonical.Program_Name) !== normalizeKey(programName)) {
+        throw new Error('Program row was created but its approved field values were not persisted.');
+      }
+
+      const now = Date.now() / 1000;
+      const appliedBy =
+        displayValue(rawSubmission.Approved_By) ||
+        displayValue(rawSubmission.Approved_By_Email) ||
+        'Approved reviewer';
+      const providerCanonicalId = displayValue(liveProvider.Provider_ID) || '';
+      const programCanonicalId = displayValue(programCanonical.Program_ID) || '';
+      const auditValues = {
+        ...programFields,
+        Provider_Canonical_ID: providerCanonicalId
+      };
+      if (programMunicipalityText) auditValues.Primary_Municipality_Label = programMunicipalityText;
+
+      await grist.docApi.applyUserActions([
+        ['UpdateRecord', 'Provider_Submissions', rawSubmission.id, {
+          Existing_Program: programRowId,
+          Applied_By: appliedBy,
+          Applied_On: now,
+          Promotion_Result: 'Success',
+          Promotion_Error: '',
+          Review_Status: 'Completed'
+        }],
+        ['AddRecord', 'KB_Promotion_Log', null, {
+          Submission_Type: 'Provider Submission',
+          Source_Submission_ID: sourceSubmissionId(rawSubmission),
+          Entity_Type: 'Program',
+          Action: 'Create',
+          Canonical_ID: programCanonicalId,
+          Canonical_Row_ID: programRowId,
+          Approved_By: displayValue(rawSubmission.Approved_By) || '',
+          Approved_By_Email: displayValue(rawSubmission.Approved_By_Email) || '',
+          Approved_On: dateTimeSeconds(rawSubmission.Approved_On),
+          Applied_By: appliedBy,
+          Applied_On: now,
+          Result: 'Success',
+          Changed_Fields: Object.keys(programFields).join('\n'),
+          Previous_Values: '{}',
+          Applied_Values: JSON.stringify(auditValues),
+          Suggestion_Source: displayValue(programDraft.suggestion_source) || 'Rules',
+          Human_Decision: 'Approved',
+          Override_Reason: 'Existing Provider preserved; new Program created.',
+          Implementation_Version: '8D.5',
+          Error_Detail: ''
+        }]
+      ]);
+
+      currentRecord.Existing_Program = programRowId;
+      currentRecord.Applied_By = appliedBy;
+      currentRecord.Applied_On = now;
+      currentRecord.Promotion_Result = 'Success';
+      currentRecord.Promotion_Error = '';
+      currentRecord.Review_Status = 'Completed';
+      put('statusBadge', 'Status: Completed');
+      put('programMatchBadge', 'Program: matched');
+      setSaveStatus(
+        'Promotion complete: existing Provider preserved; ' +
+        (programCanonicalId || 'Program row ' + programRowId) +
+        ' created and audit logged.',
+        'success'
+      );
+    } catch (err) {
+      console.error('Existing Provider + Create Program promotion failed', err);
+      const message = err && err.message ? err.message : String(err);
+      if (rawSubmission) {
+        await recordPromotionFailure(rawSubmission, 'Program', message, Boolean(programRowId));
+      }
+      const failureMessage =
+        'Program promotion stopped: ' + message +
+        (programRowId
+          ? ' A canonical Program may already exist; do not manually retry until the partial state is reviewed.'
+          : '');
+      setSaveStatus(failureMessage, 'error');
+      window.alert(failureMessage);
+    } finally {
+      promotionInProgress = false;
+      updateReadiness();
+    }
+  }
+
+  async function promoteMatchedUpdateSubmission() {
+    if (!currentRecord || !currentRecord.id || promotionInProgress) return;
+
+    promotionInProgress = true;
+    updateReadiness();
+    setSaveStatus('Rechecking approved update against current canonical records...');
+
+    let rawSubmission = null;
+    let stage = 'Provider';
+    let stageAction = 'Update';
+
+    try {
+      if (isDirty) {
+        throw new Error('The review has unsaved changes. Promotion is blocked.');
+      }
+
+      const [submissionRows, providerRows, programRows, locations] = await Promise.all([
+        fetchTableRows('Provider_Submissions'),
+        fetchTableRows('Providers'),
+        fetchTableRows('Programs'),
+        fetchTableRows('Locations')
+      ]);
+
+      rawSubmission = submissionRows.find(row => row.id === currentRecord.id);
+      if (!rawSubmission) throw new Error('The selected Provider_Submissions row could not be reloaded.');
+
+      const providerAction = displayValue(rawSubmission.Provider_Action);
+      const programAction = displayValue(rawSubmission.Program_Action);
+      const supported =
+        ['Update', 'No change'].includes(providerAction) &&
+        ['Update', 'No change'].includes(programAction) &&
+        (providerAction === 'Update' || programAction === 'Update');
+
+      if (!supported) {
+        throw new Error('Phase 8D.2 update promotion requires Update/No change decisions with at least one Update.');
+      }
+      if (!boolValue(rawSubmission.Promotion_Approved)) {
+        throw new Error('Promotion_Approved is not true on the source submission.');
+      }
+      if (displayValue(rawSubmission.Review_Status) !== 'Ready to Promote') {
+        throw new Error('Review_Status must be Ready to Promote.');
+      }
+      if (!hasValue(rawSubmission.Approved_By) ||
+          !hasValue(rawSubmission.Approved_By_Email) ||
+          !hasValue(rawSubmission.Approved_On)) {
+        throw new Error('Approval stamps are incomplete.');
+      }
+      if (displayValue(rawSubmission.Promotion_Result) === 'Success' ||
+          displayValue(rawSubmission.Review_Status) === 'Completed') {
+        throw new Error('This submission has already been promoted.');
+      }
+
+      const providerRowId = refRowId(rawSubmission.Existing_Provider);
+      const programRowId = refRowId(rawSubmission.Existing_Program);
+      if (!providerRowId || !programRowId) {
+        throw new Error('Matched update promotion requires both Existing_Provider and Existing_Program references.');
+      }
+
+      const liveProvider = providerRows.find(row => row.id === providerRowId) || null;
+      const liveProgram = programRows.find(row => row.id === programRowId) || null;
+      if (!liveProvider || !liveProgram) {
+        throw new Error('One or both matched canonical records no longer exist.');
+      }
+      if (refRowId(liveProgram.Provider) !== providerRowId) {
+        throw new Error('Matched Program is not linked to the matched Provider. Resolve the relationship before promotion.');
+      }
+
+      const providerDraft = parseDraft(rawSubmission.Provider_Review_Draft);
+      const programDraft = parseDraft(rawSubmission.Program_Review_Draft);
+      if (!providerDraft || !programDraft) {
+        throw new Error('Saved Provider and Program review drafts are required.');
+      }
+      if (providerDraft.action !== providerAction || programDraft.action !== programAction) {
+        throw new Error('Saved draft actions no longer match the approved submission actions.');
+      }
+
+      const p = providerDraft.fields || {};
+      const g = programDraft.fields || {};
+
+      const providerDesired = {
+        Provider_Name: requireText(p.Provider_Name, 'Provider Name'),
+        Website: scalarCompare(p.Website),
+        Organization_Type: scalarCompare(p.Organization_Type),
+        Primary_Municipality: resolveLocationText(
+          requireText(p.Primary_Municipality, 'Provider Primary Municipality'),
+          locations,
+          'Provider Primary Municipality'
+        ),
+        Information_Source: requireText(p.Information_Source, 'Provider Information Source'),
+        Confidence_Status: requireText(p.Confidence_Status, 'Provider Confidence Status'),
+        Provider_Participation_Level: requireText(p.Provider_Participation_Level, 'Provider Participation Level'),
+        Primary_Email: scalarCompare(p.Primary_Email)
+      };
+
+      const fundingProgram = nonBlank(g.Funding_Type) || hasValue(liveProgram.Funding_Type);
+      const programDesired = {
+        Provider: providerRowId,
+        Program_Name: requireText(g.Program_Name, 'Program Name'),
+        Program_URL: scalarCompare(g.Program_URL),
+        Program_Summary: requireText(g.Program_Summary, 'Program Summary'),
+        Days_Offered: choiceListCell(g.Days_Offered),
+        Time_of_Day: choiceListCell(g.Time_of_Day),
+        Cost_Notes: scalarCompare(g.Cost_Notes),
+        Information_Source: requireText(g.Information_Source, 'Program Information Source'),
+        Confidence_Status: requireText(g.Confidence_Status, 'Program Confidence Status'),
+        Program_Category: requireText(g.Program_Category, 'Program Category'),
+        Cost_Basis: scalarCompare(g.Cost_Basis),
+        Funding_Type: scalarCompare(g.Funding_Type),
+        Funding_Maximum: scalarCompare(g.Funding_Maximum),
+        Application_Status: scalarCompare(g.Application_Status),
+        Application_Deadline: scalarCompare(g.Application_Deadline),
+        Means_Tested: scalarCompare(g.Means_Tested),
+        Reimbursement_Based: scalarCompare(g.Reimbursement_Based),
+        Last_Verified_On: nonBlank(g.Last_Verified_On)
+          ? dateOnlySeconds(g.Last_Verified_On, 'Last Verified On')
+          : null
+      };
+
+      if (fundingProgram) {
+        if (nonBlank(g.Delivery_Mode)) programDesired.Delivery_Mode = choiceListCell([g.Delivery_Mode]);
+        if (normalizeChoiceListValue(g.Age_Band).length) programDesired.Age_Band = choiceListCell(g.Age_Band);
+        if (nonBlank(g.Primary_Municipality)) {
+          programDesired.Primary_Municipality = resolveLocationRowId(
+            g.Primary_Municipality,
+            locations,
+            'Program Primary Municipality'
+          );
+        }
+        requireText(g.Application_Status, 'Funding Program Application Status');
+        if (!dateInputValue(g.Last_Verified_On)) throw new Error('Funding Program Last Verified date is required.');
+      } else {
+        programDesired.Delivery_Mode = choiceListCell([requireText(g.Delivery_Mode, 'Program Delivery Mode')]);
+        programDesired.Age_Band = choiceListCell(g.Age_Band);
+        programDesired.Primary_Municipality = resolveLocationRowId(
+          requireText(g.Primary_Municipality, 'Program Primary Municipality'),
+          locations,
+          'Program Primary Municipality'
+        );
+        if (!choiceCompare(programDesired.Age_Band).length) {
+          throw new Error('Program Age Band is required.');
+        }
+      }
+
+      const providerDiff = providerAction === 'Update'
+        ? collectChangedFields(liveProvider, providerDesired, new Map(locations.map(row => [row.id, row])))
+        : { changed: {}, previous: {}, applied: {}, fields: [] };
+
+      const programDiff = programAction === 'Update'
+        ? collectChangedFields(liveProgram, programDesired, new Map(locations.map(row => [row.id, row])))
+        : { changed: {}, previous: {}, applied: {}, fields: [] };
+
+      if (providerAction === 'Update' && !providerDiff.fields.length) {
+        throw new Error('Provider Action is Update, but the approved Provider values are identical to the current canonical Provider. Change the action to No change and re-approve.');
+      }
+      if (programAction === 'Update' && !programDiff.fields.length) {
+        throw new Error('Program Action is Update, but the approved Program values are identical to the current canonical Program. Change the action to No change and re-approve.');
+      }
+
+      const providerBaseline = providerDraft.baseline || null;
+      const programBaseline = programDraft.baseline || null;
+
+      if (providerAction === 'Update' && !providerBaseline) {
+        throw new Error('Provider update draft has no canonical baseline. Reopen the review, save a fresh draft, and approve it again before updating.');
+      }
+      if (programAction === 'Update' && !programBaseline) {
+        throw new Error('Program update draft has no canonical baseline. Reopen the review, save a fresh draft, and approve it again before updating.');
+      }
+
+      if (
+        providerAction === 'Update' &&
+        !baselineMatchesLive(providerBaseline, liveProvider, providerDiff.fields, new Map(locations.map(row => [row.id, row])))
+      ) {
+        throw new Error('The canonical Provider changed after this review draft was saved. Re-review the current KB values before promoting.');
+      }
+
+      if (
+        programAction === 'Update' &&
+        !baselineMatchesLive(programBaseline, liveProgram, programDiff.fields, new Map(locations.map(row => [row.id, row])))
+      ) {
+        throw new Error('The canonical Program changed after this review draft was saved. Re-review the current KB values before promoting.');
+      }
+
+      const lines = [];
+      if (providerAction === 'Update') lines.push('Provider fields: ' + providerDiff.fields.join(', '));
+      if (programAction === 'Update') lines.push('Program fields: ' + programDiff.fields.join(', '));
+
+      const confirmed = window.confirm(
+        'Promote these approved canonical updates now?\n\n' +
+        lines.join('\n') +
+        '\n\nOnly the listed changed fields will be written. Eligibility and funding claims remain outside this promotion.'
+      );
+      if (!confirmed) {
+        setSaveStatus('Update promotion cancelled. No canonical records were changed.');
+        return;
+      }
+
+      const appliedBy =
+        displayValue(rawSubmission.Approved_By) ||
+        displayValue(rawSubmission.Approved_By_Email) ||
+        'Approved reviewer';
+      const auditActions = [];
+      const updateActions = [];
+
+      if (providerAction === 'Update') {
+        stage = 'Provider';
+        stageAction = 'Update';
+        updateActions.push(['UpdateRecord', 'Providers', providerRowId, providerDiff.changed]);
+      }
+
+      if (programAction === 'Update') {
+        stage = 'Program';
+        stageAction = 'Update';
+        updateActions.push(['UpdateRecord', 'Programs', programRowId, programDiff.changed]);
+      }
+
+      if (updateActions.length) {
+        setSaveStatus('Applying approved canonical updates...');
+        await grist.docApi.applyUserActions(updateActions);
+      }
+
+      const [verifiedProvider, verifiedProgram] = await Promise.all([
+        fetchRowById('Providers', providerRowId),
+        fetchRowById('Programs', programRowId)
+      ]);
+
+      if (providerAction === 'Update') {
+        const postProvider = collectChangedFields(verifiedProvider, providerDesired, new Map(locations.map(row => [row.id, row])));
+        if (postProvider.fields.length) {
+          throw new Error('Provider update was sent but one or more approved values did not persist: ' + postProvider.fields.join(', '));
+        }
+      }
+      if (programAction === 'Update') {
+        const postProgram = collectChangedFields(verifiedProgram, programDesired, new Map(locations.map(row => [row.id, row])));
+        if (postProgram.fields.length) {
+          throw new Error('Program update was sent but one or more approved values did not persist: ' + postProgram.fields.join(', '));
+        }
+      }
+
+      const now = Date.now() / 1000;
+
+      if (providerAction === 'Update') {
+        auditActions.push(['AddRecord', 'KB_Promotion_Log', null, {
+          Submission_Type: 'Provider Submission',
+          Source_Submission_ID: sourceSubmissionId(rawSubmission),
+          Entity_Type: 'Provider',
+          Action: 'Update',
+          Canonical_ID: displayValue(verifiedProvider.Provider_ID) || '',
+          Canonical_Row_ID: providerRowId,
+          Approved_By: displayValue(rawSubmission.Approved_By) || '',
+          Approved_By_Email: displayValue(rawSubmission.Approved_By_Email) || '',
+          Approved_On: dateTimeSeconds(rawSubmission.Approved_On),
+          Applied_By: appliedBy,
+          Applied_On: now,
+          Result: 'Success',
+          Changed_Fields: providerDiff.fields.join('\n'),
+          Previous_Values: JSON.stringify(providerDiff.previous),
+          Applied_Values: JSON.stringify(providerDiff.applied),
+          Suggestion_Source: displayValue(providerDraft.suggestion_source) || 'Rules',
+          Human_Decision: 'Approved',
+          Override_Reason: '',
+          Implementation_Version: '8D.2e',
+          Error_Detail: ''
+        }]);
+      }
+
+      if (programAction === 'Update') {
+        auditActions.push(['AddRecord', 'KB_Promotion_Log', null, {
+          Submission_Type: 'Provider Submission',
+          Source_Submission_ID: sourceSubmissionId(rawSubmission),
+          Entity_Type: 'Program',
+          Action: 'Update',
+          Canonical_ID: displayValue(verifiedProgram.Program_ID) || '',
+          Canonical_Row_ID: programRowId,
+          Approved_By: displayValue(rawSubmission.Approved_By) || '',
+          Approved_By_Email: displayValue(rawSubmission.Approved_By_Email) || '',
+          Approved_On: dateTimeSeconds(rawSubmission.Approved_On),
+          Applied_By: appliedBy,
+          Applied_On: now,
+          Result: 'Success',
+          Changed_Fields: programDiff.fields.join('\n'),
+          Previous_Values: JSON.stringify(programDiff.previous),
+          Applied_Values: JSON.stringify(programDiff.applied),
+          Suggestion_Source: displayValue(programDraft.suggestion_source) || 'Rules',
+          Human_Decision: 'Approved',
+          Override_Reason: '',
+          Implementation_Version: '8D.2e',
+          Error_Detail: ''
+        }]);
+      }
+
+      auditActions.push(['UpdateRecord', 'Provider_Submissions', rawSubmission.id, {
+        Applied_By: appliedBy,
+        Applied_On: now,
+        Promotion_Result: 'Success',
+        Promotion_Error: '',
+        Review_Status: 'Completed'
+      }]);
+
+      await grist.docApi.applyUserActions(auditActions);
+
+      currentRecord.Applied_By = appliedBy;
+      currentRecord.Applied_On = now;
+      currentRecord.Promotion_Result = 'Success';
+      currentRecord.Promotion_Error = '';
+      currentRecord.Review_Status = 'Completed';
+      put('statusBadge', 'Status: Completed');
+
+      setSaveStatus(
+        'Update promotion complete. ' +
+        (providerAction === 'Update' ? 'Provider updated' : 'Provider unchanged') +
+        '; ' +
+        (programAction === 'Update' ? 'Program updated' : 'Program unchanged') +
+        '. Audit log written.',
+        'success'
+      );
+    } catch (err) {
+      console.error('Phase 8D.2 update promotion failed', err);
+      const message = err && err.message ? err.message : String(err);
+      if (rawSubmission) {
+        await recordUpdatePromotionFailure(rawSubmission, stage, stageAction, message);
+      }
+      const failureMessage = 'Update promotion stopped at ' + stage + ': ' + message;
+      setSaveStatus(failureMessage, 'error');
+      window.alert(failureMessage);
+    } finally {
+      promotionInProgress = false;
+      updateReadiness();
+    }
+  }
+
+  async function promoteApprovedSubmission() {
+    if (!currentRecord || promotionInProgress) return;
+
+    const providerAction = getControl('providerAction');
+    const programAction = getControl('programAction');
+
+    if (providerAction === 'Create' && programAction === 'Create') {
+      await promoteCreateCreateSubmission();
+      return;
+    }
+
+    if (providerAction === 'No change' && programAction === 'Create') {
+      await promoteExistingProviderCreateProgram();
+      return;
+    }
+
+    const updatePair =
+      ['Update', 'No change'].includes(providerAction) &&
+      ['Update', 'No change'].includes(programAction) &&
+      (providerAction === 'Update' || programAction === 'Update');
+
+    if (updatePair) {
+      await promoteMatchedUpdateSubmission();
+      return;
+    }
+
+    setSaveStatus(
+      'Unsupported promotion combination. Use Create/Create, No change/Create for a new Program under an existing Provider, or matched Update/No change with at least one Update.',
+      'error'
+    );
+  }
+
+  function inferredEntityAction(existingReference) {
+    return hasValue(existingReference) ? '' : 'Create';
+  }
+
+  async function render(record) {
+    currentRecord = record || null;
+
+    if (!record) {
+      document.getElementById('waiting').style.display = 'block';
+      document.getElementById('workspace').style.display = 'none';
+      return;
+    }
+
+    isRendering = true;
+
+    document.getElementById('waiting').style.display = 'none';
+    document.getElementById('workspace').style.display = 'block';
+
+    const providerDraft = parseDraft(record.Provider_Review_Draft) || {};
+    const programDraft = parseDraft(record.Program_Review_Draft) || {};
+    const providerFields = providerDraft.fields || {};
+    const programFields = programDraft.fields || {};
+    const claims = programDraft.claims || {};
+
+    let canonical = { submission: null, provider: null, program: null, locationsById: new Map() };
+    try {
+      canonical = await fetchCanonicalContext(record);
+    } catch (err) {
+      console.error('Canonical comparison load failed', err);
+      setSaveStatus('Canonical comparison could not be loaded. Draft editing still works.', 'error');
+    }
+
+    const currentProvider = canonical.provider;
+    const currentProgram = canonical.program;
+    const submission = canonical.submission || record;
+    const museResearch = displayValue(submission.Submission_Source) === 'Muse Research';
+    const defaultInformationSource = museResearch ? 'Synaptree research' : 'Provider submitted';
+    const defaultConfidenceStatus = museResearch ? 'Published information checked' : 'Provider supplied';
+    currentCanonicalContext = canonical;
+
+    promotionRecovery = await determinePromotionRecovery(record);
+
+    put('submissionBadge', 'Submission: ' + (displayValue(record.Submission_ID) || 'Unknown'));
+    put('statusBadge', 'Status: ' + (displayValue(record.Review_Status) || 'Not set'));
+
+    put(
+      'providerMatchBadge',
+      hasValue(record.Existing_Provider) ? 'Provider: matched' : 'Provider: new'
+    );
+
+    put(
+      'programMatchBadge',
+      hasValue(record.Existing_Program) ? 'Program: matched' : 'Program: new'
+    );
+
+    setControl(
+      'providerAction',
+      providerDraft.action || displayValue(record.Provider_Action) || inferredEntityAction(record.Existing_Provider)
+    );
+
+    setControl(
+      'programAction',
+      programDraft.action || displayValue(record.Program_Action) || inferredEntityAction(record.Existing_Program)
+    );
+
+    document.getElementById('providerMatchNotice').textContent =
+      promotionRecovery.safeProviderResume
+        ? (promotionRecovery.repairBlankProvider
+            ? 'This submission points to an audited Provider row created by the earlier promotion attempt, but the Provider display fields are blank. Phase 8D.1c will repair that same row from the approved draft before resuming Program creation.'
+            : 'This Provider was created by an earlier partial promotion of the same submission. The audit log proves ownership, so Phase 8D.1c may safely reuse it and resume at Program creation.')
+        : (hasValue(record.Existing_Provider)
+            ? 'An existing Provider is matched. Current KB values are shown beside the submission so the reviewer can focus on differences.'
+            : 'No existing Provider is matched. The default action is CREATE; reviewer approval will still be required before canonical promotion.');
+
+    document.getElementById('programMatchNotice').textContent =
+      hasValue(record.Existing_Program)
+        ? 'An existing Program is matched. Current KB values are shown beside the submission so the reviewer can focus on differences.'
+        : 'No existing Program is matched. The default action is CREATE; reviewer approval will still be required before canonical promotion.';
+
+    put('p_cur_name', currentProvider && currentProvider.Provider_Name, 'No canonical record');
+    put('p_cur_website', currentProvider && currentProvider.Website, 'No canonical record');
+    put('p_cur_orgtype', currentProvider && currentProvider.Organization_Type, 'No canonical record');
+    put(
+      'p_cur_municipality',
+      currentProvider ? locationLabel(currentProvider.Primary_Municipality, canonical.locationsById) : null,
+      'No canonical record'
+    );
+    put('p_cur_source', currentProvider && currentProvider.Information_Source, 'No canonical record');
+    put('p_cur_confidence', currentProvider && currentProvider.Confidence_Status, 'No canonical record');
+    put('p_cur_participation', currentProvider && currentProvider.Provider_Participation_Level, 'No canonical record');
+    put('p_cur_email', currentProvider && currentProvider.Primary_Email, 'No canonical record');
+
+    put('p_sub_name', record.Provider_Name);
+    put('p_sub_website', record.Website);
+    put('p_sub_orgtype', null, 'Not collected in submission');
+    put('p_sub_municipality', record.Municipality, 'Program municipality only');
+    put('p_sub_source', null, 'Derived from submission');
+    put('p_sub_confidence', null, 'Derived from submission');
+    put('p_sub_participation', null, 'No participation level supplied');
+    put('p_sub_email', record.Contact_Email);
+
+    setControl(
+      'p_final_name',
+      draftOr(providerFields, 'Provider_Name', submittedOrCurrent(record.Provider_Name, currentProvider && currentProvider.Provider_Name))
+    );
+    setControl(
+      'p_final_website',
+      draftOr(providerFields, 'Website', submittedOrCurrent(record.Website, currentProvider && currentProvider.Website))
+    );
+    setControl(
+      'p_final_orgtype',
+      draftOr(providerFields, 'Organization_Type', displayValue(currentProvider && currentProvider.Organization_Type) || '')
+    );
+    setControl(
+      'p_final_municipality',
+      draftOr(
+        providerFields,
+        'Primary_Municipality',
+        currentProvider ? locationLabel(currentProvider.Primary_Municipality, canonical.locationsById) : ''
+      )
+    );
+    setControl(
+      'p_final_source',
+      draftOr(
+        providerFields,
+        'Information_Source',
+        displayValue(currentProvider && currentProvider.Information_Source) || defaultInformationSource
+      )
+    );
+    setControl(
+      'p_final_confidence',
+      draftOr(
+        providerFields,
+        'Confidence_Status',
+        displayValue(currentProvider && currentProvider.Confidence_Status) || defaultConfidenceStatus
+      )
+    );
+    setControl(
+      'p_final_participation',
+      draftOr(
+        providerFields,
+        'Provider_Participation_Level',
+        displayValue(currentProvider && currentProvider.Provider_Participation_Level) || 'Community listing'
+      )
+    );
+    setControl(
+      'p_final_email',
+      draftOr(providerFields, 'Primary_Email', displayValue(currentProvider && currentProvider.Primary_Email) || '')
+    );
+
+    put('Contact_Name', record.Contact_Name);
+    put('Contact_Role', record.Contact_Role);
+    put('Existing_Provider', record.Existing_Provider);
+
+    put('g_cur_name', currentProgram && currentProgram.Program_Name, 'No canonical record');
+    put('g_cur_url', currentProgram && currentProgram.Program_URL, 'No canonical record');
+    put('g_cur_summary', currentProgram && currentProgram.Program_Summary, 'No canonical record');
+    put('g_cur_delivery', currentProgram && currentProgram.Delivery_Mode, 'No canonical record');
+    put('g_cur_days', currentProgram && currentProgram.Days_Offered, 'No canonical record');
+    put('g_cur_time', currentProgram && currentProgram.Time_of_Day, 'No canonical record');
+    put('g_cur_costnotes', currentProgram && currentProgram.Cost_Notes, 'No canonical record');
+    put('g_cur_source', currentProgram && currentProgram.Information_Source, 'No canonical record');
+    put('g_cur_confidence', currentProgram && currentProgram.Confidence_Status, 'No canonical record');
+    put('g_cur_category', currentProgram && currentProgram.Program_Category, 'No canonical record');
+    put('g_cur_fundingtype', currentProgram && currentProgram.Funding_Type, 'No canonical record');
+    put('g_cur_fundingmaximum', currentProgram && currentProgram.Funding_Maximum, 'No canonical record');
+    put('g_cur_applicationstatus', currentProgram && currentProgram.Application_Status, 'No canonical record');
+    put('g_cur_applicationdeadline', currentProgram && currentProgram.Application_Deadline, 'No canonical record');
+    put('g_cur_meanstested', currentProgram && currentProgram.Means_Tested, 'No canonical record');
+    put('g_cur_reimbursement', currentProgram && currentProgram.Reimbursement_Based, 'No canonical record');
+    put('g_cur_lastverified', currentProgram ? dateInputValue(currentProgram.Last_Verified_On) : null, 'No canonical record');
+    put('g_cur_age', currentProgram && currentProgram.Age_Band, 'No canonical record');
+    put(
+      'g_cur_municipality',
+      currentProgram ? locationLabel(currentProgram.Primary_Municipality, canonical.locationsById) : null,
+      'No canonical record'
+    );
+    put('g_cur_costbasis', currentProgram && currentProgram.Cost_Basis, 'No canonical record');
+
+    put('g_sub_name', record.Program_Name);
+    put('g_sub_url', record.Program_URL);
+    put('g_sub_summary', record.Program_Description);
+    put('g_sub_delivery', record.Delivery_Mode);
+    put('g_sub_days', record.Days_Offered);
+    put('g_sub_time', record.Time_of_Day);
+    put('g_sub_costnotes', record.Cost_Information);
+    put('g_sub_source', null, 'Derived from submission');
+    put('g_sub_confidence', null, 'Derived from submission');
+    put('g_sub_category', submission.Program_Category);
+    put('g_sub_fundingtype', submission.Funding_Type);
+    put('g_sub_fundingmaximum', submission.Funding_Maximum);
+    put('g_sub_applicationstatus', submission.Application_Status);
+    put('g_sub_applicationdeadline', submission.Application_Deadline);
+    put('g_sub_meanstested', submission.Means_Tested);
+    put('g_sub_reimbursement', submission.Reimbursement_Based);
+    put('g_sub_lastverified', dateInputValue(submission.Last_Verified_On));
+    put('g_sub_age', record.Age_Range);
+    put('g_sub_municipality', record.Municipality);
+    put('g_sub_costbasis', record.Cost_Information);
+
+    setControl(
+      'g_final_name',
+      draftOr(programFields, 'Program_Name', submittedOrCurrent(record.Program_Name, currentProgram && currentProgram.Program_Name))
+    );
+    setControl(
+      'g_final_url',
+      draftOr(programFields, 'Program_URL', submittedOrCurrent(record.Program_URL, currentProgram && currentProgram.Program_URL))
+    );
+    setControl(
+      'g_final_summary',
+      draftOr(programFields, 'Program_Summary', submittedOrCurrent(record.Program_Description, currentProgram && currentProgram.Program_Summary))
+    );
+    setControl(
+      'g_final_delivery',
+      draftOr(programFields, 'Delivery_Mode', submittedOrCurrent(record.Delivery_Mode, currentProgram && currentProgram.Delivery_Mode))
+    );
+    setControl(
+      'g_final_days',
+      draftOr(programFields, 'Days_Offered', submittedOrCurrent(record.Days_Offered, currentProgram && currentProgram.Days_Offered))
+    );
+    setControl(
+      'g_final_time',
+      draftOr(programFields, 'Time_of_Day', submittedOrCurrent(record.Time_of_Day, currentProgram && currentProgram.Time_of_Day))
+    );
+    setControl(
+      'g_final_costnotes',
+      draftOr(programFields, 'Cost_Notes', submittedOrCurrent(record.Cost_Information, currentProgram && currentProgram.Cost_Notes))
+    );
+    setControl(
+      'g_final_source',
+      draftOr(
+        programFields,
+        'Information_Source',
+        displayValue(currentProgram && currentProgram.Information_Source) || defaultInformationSource
+      )
+    );
+    setControl(
+      'g_final_confidence',
+      draftOr(
+        programFields,
+        'Confidence_Status',
+        displayValue(currentProgram && currentProgram.Confidence_Status) || defaultConfidenceStatus
+      )
+    );
+    setControl(
+      'g_final_category',
+      draftOr(
+        programFields,
+        'Program_Category',
+        reviewDefault(submission.Program_Category, currentProgram && currentProgram.Program_Category, !!currentProgram)
+      )
+    );
+    setControl(
+      'g_final_fundingtype',
+      draftOr(programFields, 'Funding_Type', reviewDefault(submission.Funding_Type, currentProgram && currentProgram.Funding_Type, !!currentProgram))
+    );
+    setControl(
+      'g_final_fundingmaximum',
+      draftOr(programFields, 'Funding_Maximum', reviewDefault(submission.Funding_Maximum, currentProgram && currentProgram.Funding_Maximum, !!currentProgram))
+    );
+    setControl(
+      'g_final_applicationstatus',
+      draftOr(programFields, 'Application_Status', reviewDefault(submission.Application_Status, currentProgram && currentProgram.Application_Status, !!currentProgram))
+    );
+    setControl(
+      'g_final_applicationdeadline',
+      draftOr(programFields, 'Application_Deadline', reviewDefault(submission.Application_Deadline, currentProgram && currentProgram.Application_Deadline, !!currentProgram))
+    );
+    setControl(
+      'g_final_meanstested',
+      draftOr(programFields, 'Means_Tested', reviewDefault(submission.Means_Tested, currentProgram && currentProgram.Means_Tested, !!currentProgram))
+    );
+    setControl(
+      'g_final_reimbursement',
+      draftOr(programFields, 'Reimbursement_Based', reviewDefault(submission.Reimbursement_Based, currentProgram && currentProgram.Reimbursement_Based, !!currentProgram))
+    );
+    setControl(
+      'g_final_lastverified',
+      draftOr(
+        programFields,
+        'Last_Verified_On',
+        currentProgram && hasValue(currentProgram.Last_Verified_On)
+          ? dateInputValue(currentProgram.Last_Verified_On)
+          : dateInputValue(submission.Last_Verified_On)
+      )
+    );
+
+    const defaultAgeBands = hasValue(record.Age_Range)
+      ? suggestAgeBands(record.Age_Range)
+      : normalizeChoiceListValue(currentProgram && currentProgram.Age_Band);
+
+    setChoiceList(
+      'g_final_age',
+      hasOwn(programFields, 'Age_Band') ? programFields.Age_Band : defaultAgeBands
+    );
+
+    setControl(
+      'g_final_municipality',
+      draftOr(
+        programFields,
+        'Primary_Municipality',
+        hasValue(record.Municipality)
+          ? displayValue(record.Municipality)
+          : (currentProgram ? locationLabel(currentProgram.Primary_Municipality, canonical.locationsById) : '')
+      )
+    );
+    setControl(
+      'g_final_costbasis',
+      draftOr(programFields, 'Cost_Basis', displayValue(currentProgram && currentProgram.Cost_Basis) || '')
+    );
+
+    put('Service_Area', record.Service_Area);
+    put('Existing_Program', record.Existing_Program);
+    put('Submission_Source', submission.Submission_Source);
+    put('Research_Run_ID', submission.Research_Run_ID);
+    put('Research_Source_Notes', submission.Research_Source_Notes);
+
+    put('c_sub_eligibility', record.Eligibility_Information);
+    put('c_sub_funding', record.Funding_Information);
+    put('c_sub_additional', record.Additional_Information);
+    put('c_sub_reviewnotes', record.Review_Notes);
+
+    setControl(
+      'c_decision_eligibility',
+      claims.eligibility_decision || (hasValue(record.Eligibility_Information) ? 'Verification required' : 'No change')
+    );
+
+    setControl(
+      'c_decision_funding',
+      claims.funding_decision || (hasValue(record.Funding_Information) ? 'Verification required' : 'No change')
+    );
+
+    setControl(
+      'c_decision_additional',
+      claims.additional_decision || (hasValue(record.Additional_Information) ? 'Accept' : 'No change')
+    );
+
+    setControl('draftReviewerNotes', programDraft.reviewer_notes || '');
+
+    // A No change decision must visually and operationally preserve the current KB.
+    // Reset any stale/submitted Suggested / Final values to canonical before unlocking.
+    if (getControl('providerAction') === 'No change') {
+      syncProviderControlsToCanonical();
+    }
+    if (getControl('programAction') === 'No change') {
+      syncProgramControlsToCanonical();
+    }
+    applyEntityActionState(boolValue(record.Promotion_Approved));
+
+    isDirty = false;
+    const persisted = persistedPromotionMessage(record);
+    if (promotionRecovery.safeProviderResume && promotionRecovery.priorProgramFailure) {
+      setSaveStatus(
+        (promotionRecovery.repairBlankProvider
+          ? 'Safe repair + resume available. '
+          : 'Safe resume available. ') +
+        'Previous Program failure: ' + promotionRecovery.priorProgramFailure,
+        'error'
+      );
+    } else if (persisted) {
+      setSaveStatus(persisted.text, persisted.kind);
+    } else {
+      setSaveStatus(
+        providerDraft.version || programDraft.version
+          ? 'Saved draft loaded.'
+          : 'No saved review draft yet.'
+      );
+    }
+
+    isRendering = false;
+    updateReadiness();
+  }
+
+  function collectProviderDraft() {
+    if (getControl('providerAction') === 'No change') {
+      syncProviderControlsToCanonical();
+    }
+
+    return {
+      version: '8D.4',
+      suggestion_source: 'Rules',
+      action: getControl('providerAction'),
+      baseline: buildBaseline(
+        currentCanonicalContext.provider,
+        currentCanonicalContext.locationsById
+      ),
+      fields: {
+        Provider_Name: getControl('p_final_name'),
+        Website: getControl('p_final_website'),
+        Organization_Type: getControl('p_final_orgtype'),
+        Primary_Municipality: getControl('p_final_municipality'),
+        Information_Source: getControl('p_final_source'),
+        Confidence_Status: getControl('p_final_confidence'),
+        Provider_Participation_Level: getControl('p_final_participation'),
+        Primary_Email: getControl('p_final_email')
+      }
+    };
+  }
+
+  function collectProgramDraft() {
+    if (getControl('programAction') === 'No change') {
+      syncProgramControlsToCanonical();
+    }
+
+    return {
+      version: '8D.4',
+      suggestion_source: 'Rules',
+      action: getControl('programAction'),
+      baseline: buildBaseline(
+        currentCanonicalContext.program,
+        currentCanonicalContext.locationsById
+      ),
+      fields: {
+        Program_Name: getControl('g_final_name'),
+        Program_URL: getControl('g_final_url'),
+        Program_Summary: getControl('g_final_summary'),
+        Delivery_Mode: getControl('g_final_delivery'),
+        Days_Offered: getControl('g_final_days'),
+        Time_of_Day: getControl('g_final_time'),
+        Cost_Notes: getControl('g_final_costnotes'),
+        Information_Source: getControl('g_final_source'),
+        Confidence_Status: getControl('g_final_confidence'),
+        Program_Category: getControl('g_final_category'),
+        Funding_Type: getControl('g_final_fundingtype'),
+        Funding_Maximum: getControl('g_final_fundingmaximum'),
+        Application_Status: getControl('g_final_applicationstatus'),
+        Application_Deadline: getControl('g_final_applicationdeadline'),
+        Means_Tested: getControl('g_final_meanstested'),
+        Reimbursement_Based: getControl('g_final_reimbursement'),
+        Last_Verified_On: getControl('g_final_lastverified'),
+        Age_Band: getChoiceList('g_final_age'),
+        Primary_Municipality: getControl('g_final_municipality'),
+        Cost_Basis: getControl('g_final_costbasis')
+      },
+      claims: {
+        eligibility_decision: getControl('c_decision_eligibility'),
+        funding_decision: getControl('c_decision_funding'),
+        additional_decision: getControl('c_decision_additional')
+      },
+      reviewer_notes: getControl('draftReviewerNotes')
+    };
+  }
+
+  async function saveDraft() {
+    if (!currentRecord || !currentRecord.id) {
+      setSaveStatus('Cannot save: no selected submission row.', 'error');
+      return;
+    }
+
+    if (boolValue(currentRecord.Promotion_Approved)) {
+      setSaveStatus('This review is already approved and locked. Do not alter an approved draft.', 'error');
+      return;
+    }
+
+    const providerAction = getControl('providerAction');
+    const programAction = getControl('programAction');
+
+    if (!providerAction || !programAction) {
+      setSaveStatus('Select both Provider Action and Program Action before saving.', 'error');
+      return;
+    }
+
+    const button = document.getElementById('saveDraft');
+    button.disabled = true;
+    setSaveStatus('Saving review draft...');
+
+    const providerDraft = collectProviderDraft();
+    const programDraft = collectProgramDraft();
+
+    const updates = {
+      Provider_Action: providerAction,
+      Program_Action: programAction,
+      Provider_Review_Draft: JSON.stringify(providerDraft),
+      Program_Review_Draft: JSON.stringify(programDraft)
+    };
+
+    if (['New', 'Ready to Promote', 'Verification Required'].includes(displayValue(currentRecord.Review_Status))) {
+      updates.Review_Status = 'In Review';
+    }
+
+    try {
+      await grist.docApi.applyUserActions([
+        ['UpdateRecord', 'Provider_Submissions', currentRecord.id, updates]
+      ]);
+
+      currentRecord.Provider_Action = providerAction;
+      currentRecord.Program_Action = programAction;
+      currentRecord.Provider_Review_Draft = JSON.stringify(providerDraft);
+      currentRecord.Program_Review_Draft = JSON.stringify(programDraft);
+
+      if (updates.Review_Status) {
+        currentRecord.Review_Status = updates.Review_Status;
+        put('statusBadge', 'Status: ' + updates.Review_Status);
+      }
+
+      isDirty = false;
+      setSaveStatus('Review draft saved to Provider_Submissions.', 'success');
+      updateReadiness();
+    } catch (err) {
+      console.error(err);
+      setSaveStatus('Save failed: ' + (err && err.message ? err.message : String(err)), 'error');
+    } finally {
+      button.disabled = false;
+    }
+  }
+
+  grist.onRecord(function(record) {
+    render(record).catch(err => {
+      console.error(err);
+      setSaveStatus('Widget render failed: ' + (err && err.message ? err.message : String(err)), 'error');
+    });
+  });
+
+  document.querySelectorAll('.tab').forEach(button => {
+    button.addEventListener('click', function() {
+      document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+      document.querySelectorAll('.panel').forEach(panel => panel.classList.remove('active'));
+      button.classList.add('active');
+      document.getElementById(button.dataset.tab).classList.add('active');
+    });
+  });
+
+  document.getElementById('providerAction').addEventListener('change', function() {
+    handleEntityActionChange('provider');
+  });
+  document.getElementById('programAction').addEventListener('change', function() {
+    handleEntityActionChange('program');
+  });
+
+  document.querySelectorAll('input, select, textarea').forEach(element => {
+    if (element.id === 'providerAction' || element.id === 'programAction') return;
+    element.addEventListener('change', markDirty);
+    element.addEventListener('input', markDirty);
+  });
+
+  document.getElementById('saveDraft').addEventListener('click', saveDraft);
+  document.getElementById('markReady').addEventListener('click', markReadyToPromote);
+  document.getElementById('recordApproval').addEventListener('click', recordHumanApproval);
+  document.getElementById('reopenReview').addEventListener('click', reopenApprovedReview);
+  document.getElementById('finalizeDisposition').addEventListener('click', finalizeReviewDisposition);
+  document.getElementById('promoteApproved').addEventListener('click', promoteApprovedSubmission);
+</script>
+</body>
+</html>
